@@ -1,6 +1,49 @@
-# Getting Started with Create React App
+# Check-in Grid App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A simple grid-based check-in application that allows tracking weekly activities. The app uses Digital Ocean Spaces for persistent storage of the grid state.
+
+## Digital Ocean Spaces Integration
+
+This app can save its state to Digital Ocean Spaces, which allows for persistence between browser sessions and devices.
+
+### Setup
+
+1. Create a Digital Ocean account if you don't have one
+2. Create a new Spaces bucket in your preferred region
+3. Create API keys:
+   - Go to API > Tokens/Keys
+   - Generate new Spaces access keys
+   - Save both the access key and secret key securely
+4. Configure CORS for your Space (REQUIRED):
+   - Go to your Space in the Digital Ocean console
+   - Click on "Settings" and then the "CORS" tab
+   - Add a CORS configuration:
+     - Origin: `*` (or your specific domain like `http://localhost:3000`)
+     - Allowed Methods: `GET, PUT, POST, DELETE`
+     - Allowed Headers: `*`
+     - Max Age: `86400` (or your preferred value)
+   - Click "Save"
+5. Copy the `.env.example` file to `.env.local`:
+   ```
+   cp .env.example .env.local
+   ```
+6. Edit the `.env.local` file and add your Digital Ocean Spaces configuration:
+   ```
+   REACT_APP_DO_SPACES_ACCESS_KEY=your_access_key_here
+   REACT_APP_DO_SPACES_SECRET_KEY=your_secret_key_here
+   REACT_APP_DO_SPACES_ENDPOINT=https://your-region.digitaloceanspaces.com
+   REACT_APP_DO_SPACES_REGION=your-region
+   REACT_APP_DO_SPACES_BUCKET=your-bucket-name
+   ```
+
+If the Digital Ocean Spaces configuration is not provided, the app will still work but won't save state between sessions.
+
+### CORS Issues
+
+If you encounter CORS errors when saving state:
+1. Verify that you have configured CORS on your Digital Ocean Space as described above
+2. For local development, make sure your environment variables are correctly set in `.env.local`
+3. If deploying to production, ensure your production domain is included in the allowed origins (or use `*` for any origin)
 
 ## Available Scripts
 
@@ -29,17 +72,9 @@ Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
 ## Learn More
+
+This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
