@@ -17,7 +17,7 @@ function App() {
     { label: ' ', color: '#f0f0f0' },
     { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
     { label: 'L', color: '#FDAEA9', todoIstId: '35677852' },
-    { label: 'B', color: '#F0CA86', todoistId: '35630104,35677852' }
+    { label: 'B', color: '#F0CA86' }
   ];
   
   // State for the app
