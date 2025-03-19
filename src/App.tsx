@@ -196,12 +196,6 @@ function App() {
 
   return (
     <div className="App">      
-      {false && !configValid && (
-        <div className="config-warning">
-          <p>⚠️ Digital Ocean Spaces not configured. State will not be saved.</p>
-        </div>
-      )}
-      
       <main>
         {isLoading ? (
           <div className="loading">Loading...</div>
@@ -234,17 +228,9 @@ function App() {
                   >
                     Sync to Todoist
                   </button>
-                  {syncStatus && <p className="sync-status">{syncStatus}</p>}
                 </>
               )}
-
-              <div className="route-info">
-                <div className="current-route">
-                  <h2>Current Grid: {routeName}</h2>
-                  {saveStatus && <p className="save-status-text">{saveStatus}</p>}
-                  {hasUnsavedChanges && <p className="unsaved-indicator">Unsaved changes</p>}
-                </div>
-              </div>
+              {syncStatus && <p className="sync-status">{syncStatus}</p>}
             </div>
           </>
         )}

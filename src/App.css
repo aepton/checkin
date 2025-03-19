@@ -3,62 +3,19 @@
   font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
 }
 
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.App-header h1 {
-  margin: 0;
-  font-size: 2.5rem;
-}
-
-.App-header p {
-  margin-top: 10px;
-  font-size: 1rem;
-}
-
 main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
+  padding: 10px;
+  overflow-x: auto;
+  width: 100%;
 }
 
-.save-status {
-  margin-top: 10px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.save-status p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #8eff8e;
-}
-
-.save-status .unsaved-indicator {
-  color: #ffcc00;
-  font-style: italic;
-}
-
-.config-warning {
-  margin-top: 10px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  background-color: rgba(255, 193, 7, 0.2);
-}
-
-.config-warning p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #ffdd57;
+@media (min-width: 768px) {
+  main {
+    padding: 20px;
+  }
 }
 
 .loading {
@@ -70,71 +27,6 @@ main {
   color: #666;
 }
 
-.route-info {
-  margin-bottom: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.current-route {
-  text-align: center;
-}
-
-.current-route h2 {
-  margin-bottom: 5px;
-  color: #333;
-}
-
-.save-status-text {
-  margin: 5px 0;
-  font-size: 14px;
-  color: #666;
-}
-
-.route-selector {
-  margin-top: 10px;
-  text-align: center;
-}
-
-.route-selector h3 {
-  margin-bottom: 10px;
-  font-size: 16px;
-  color: #555;
-}
-
-.route-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.route-list li {
-  padding: 5px 10px;
-  background-color: #f0f0f0;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.route-list li:hover {
-  background-color: #e0e0e0;
-}
-
-.route-list li.active {
-  background-color: #d0d0d0;
-  font-weight: bold;
-}
-
-.route-list li a {
-  text-decoration: none;
-  color: #333;
-}
-
 .button-container {
   margin-top: 20px;
   display: flex;
@@ -142,24 +34,40 @@ main {
   justify-content: center;
   align-items: center;
   gap: 10px;
-  width: 25%;
-  position: fixed;
-  top: 0;
-  right: 0;
+  width: 100%;
+  max-width: 300px;
+}
+
+@media (min-width: 768px) {
+  .button-container {
+    width: 25%;
+    position: fixed;
+    top: 0;
+    right: 0;
+  }
 }
 
 .save-button, .todoist-button {
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 16px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
-  font-size: 16px;
+  font-size: 14px;
   margin: 4px 2px;
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.3s;
+  width: 100%;
+  max-width: 200px;
+}
+
+@media (min-width: 768px) {
+  .save-button, .todoist-button {
+    padding: 10px 20px;
+    font-size: 16px;
+  }
 }
 
 .save-button {
@@ -187,11 +95,16 @@ main {
   font-size: 14px;
   margin: 5px 0;
   color: #666;
-  position: fixed;
-  top: 50px;
-  right: 10px;
   background-color: rgba(255, 255, 255, 0.8);
   padding: 5px 10px;
   border-radius: 4px;
   z-index: 100;
+}
+
+@media (min-width: 768px) {
+  .sync-status {
+    position: fixed;
+    top: 50px;
+    right: 10px;
+  }
 }

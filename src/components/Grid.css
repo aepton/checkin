@@ -1,6 +1,8 @@
 .grid-container {
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .grid-row {
@@ -12,13 +14,27 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 140px;
-  height: 140px;
+  width: 60px;
+  height: 60px;
+}
+
+@media (min-width: 768px) {
+  .grid-cell {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-cell {
+    width: 140px;
+    height: 140px;
+  }
 }
 
 .header-cell {
   font-weight: bold;
-  font-size: 24px;
+  font-size: 14px;
   color: #555;
   text-align: center;
   display: flex;
@@ -27,7 +43,33 @@
   justify-content: center;
 }
 
+@media (min-width: 768px) {
+  .header-cell {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .header-cell {
+    font-size: 24px;
+  }
+}
+
 .corner-cell {
-  width: 140px;
-  height: 140px;
+  width: 60px;
+  height: 60px;
+}
+
+@media (min-width: 768px) {
+  .corner-cell {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .corner-cell {
+    width: 140px;
+    height: 140px;
+  }
 }

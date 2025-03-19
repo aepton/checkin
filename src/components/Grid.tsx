@@ -29,8 +29,14 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
       
-      const dayName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][i];
-      const formattedDate = `${dayName} ${date.getMonth() + 1}/${date.getDate()}`;
+      const dayName = ['M', 'T', 'W', 'T', 'F'][i];
+      let formattedDate;
+      
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        formattedDate = `${dayName}`;
+      } else {
+        formattedDate = `${['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][i]} ${date.getMonth() + 1}/${date.getDate()}`;
+      }
       
       weekDates.push(formattedDate);
     }
@@ -38,10 +44,42 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
     return weekDates;
   };
   
-  const columnHeadings = getWeekDates();
+  const [columnHeadings, setColumnHeadings] = useState<string[]>(getWeekDates());
+  
+  // Update headings on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setColumnHeadings(getWeekDates());
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
   
   // Generate row headings
-  const rowHeadings = ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
+  const getRowHeadings = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return ['AM🍓', 'AM🫐', 'PM🍓', 'PM🫐', '🍽️'];
+    } else {
+      return ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
+    }
+  };
+  
+  const [rowHeadings, setRowHeadings] = useState<string[]>(getRowHeadings());
+  
+  // Update row headings on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setRowHeadings(getRowHeadings());
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   // Store the state of all tiles in the grid
   const [gridState, setGridState] = useState<
@@ -69,7 +107,7 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
     if (gridState.length > 0 && onStateChange) {
       onStateChange({ gridState });
     }
-  }, [JSON.stringify(gridState)]);
+  }, [gridState, onStateChange]);
 
   // Handle tile click and update the grid state
   const handleTileStateChange = (rowIndex: number, colIndex: number, newStateIndex: number) => {
