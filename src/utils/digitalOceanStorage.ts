@@ -71,6 +71,7 @@ export const saveState = async (
   routeName?: string
 ): Promise<boolean> => {
   try {
+    console.log(state);
     const s3 = initializeStorage(config);
     const storageKey = routeName ? getKeyForRoute(key, routeName) : key;
     

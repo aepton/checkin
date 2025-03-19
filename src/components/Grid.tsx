@@ -102,12 +102,12 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
     }
   }, [initialState, rowHeadings.length, columnHeadings.length]);
 
-  // Notify parent component of state changes
+  // Notify parent component of state changes only when gridState changes
   useEffect(() => {
     if (gridState.length > 0 && onStateChange) {
       onStateChange({ gridState });
     }
-  }, [gridState, onStateChange]);
+  }, [gridState]);  // Remove onStateChange from deps to prevent infinite loops
 
   // Handle tile click and update the grid state
   const handleTileStateChange = (rowIndex: number, colIndex: number, newStateIndex: number) => {

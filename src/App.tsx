@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import './App.css';
 import Grid from './components/Grid';
 import { AppState, loadState, saveState, listSavedStates } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
 import { doSpacesConfig, appConfig, todoistConfig } from './config';
+import { config } from 'process';
+import { group } from 'console';
 
 function App() {
   // Get the route parameter from the URL
@@ -13,9 +15,9 @@ function App() {
   // Define the states for the tiles (letters that will cycle through)
   const tileStates = [
     { label: ' ', color: '#f0f0f0' },
-    { label: 'A', color: '#9AD7A4' },
+    { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
     { label: 'L', color: '#FDAEA9' },
-    { label: 'B', color: '#F0CA86' }
+    { label: 'B', color: '#F0CA86', todoistId: '35630104,' }
   ];
   
   // State for the app
@@ -26,6 +28,10 @@ function App() {
   const [todoistConfigValid, setTodoistConfigValid] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
+  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
+  
+  // Ref to store the latest state without triggering re-renders
+  const appStateRef = useRef<AppState | null>(null);
 
   // Check if the configurations are valid
   useEffect(() => {
@@ -67,6 +73,9 @@ function App() {
           );
           
           setAppState(loadedState);
+          // Also update ref
+          appStateRef.current = loadedState;
+          
           if (loadedState) {
             setSaveStatus(`State for "${routeName}" loaded successfully`);
           } else {
@@ -102,26 +111,38 @@ function App() {
 
   // Handle state changes from Grid component
   const handleStateChange = (newState: AppState) => {
+    // Update the ref without triggering re-renders
+    appStateRef.current = newState;
+    // Now we can uncomment this line safely
     setAppState(newState);
     setHasUnsavedChanges(true);
   };
 
   // Save state to Digital Ocean Spaces
   const handleSave = async () => {
-    if (!configValid || !appState) return;
+    console.log('handling save', configValid, appStateRef.current);
+    // Use ref instead of state to avoid timing issues
+    if (!configValid || !appStateRef.current) return;
     
     setSaveStatus('Saving...');
     try {
       const saved = await saveState(
         doSpacesConfig,
         appConfig.defaultStateKey,
-        appState,
+        appStateRef.current, // Use ref instead of state
         routeName
       );
+
+      console.log('saved', saved);
       
       if (saved) {
         setSaveStatus(`Saved "${routeName}" successfully`);
         setHasUnsavedChanges(false);
+        
+        // Show the sync modal when save is successful
+        if (todoistConfigValid) {
+          setShowSyncModal(true);
+        }
       } else {
         setSaveStatus('Error saving state');
       }
@@ -133,10 +154,26 @@ function App() {
   
   // Sync tasks to Todoist
   const syncToTodoist = async () => {
-    if (!todoistConfigValid || !appState) return;
+    if (!todoistConfigValid || !appStateRef.current) return;
     
     setSyncStatus('Syncing to Todoist...');
     try {
+      const contents: { [key: string]: string } = {
+        'AM 🍓': 'Drop off Imogen',
+        'AM 🫐': 'Drop off Ida',
+        'PM 🍓': 'Pick up Imogen',
+        'PM 🫐': 'Pick up Ida',
+        'Dinner': 'Cook dinner',
+
+      };
+      const times: { [key: string]: string } = {
+        'AM 🍓': '08:00',
+        'AM 🫐': '08:00',
+        'PM 🍓': '16:25',
+        'PM 🫐': '16:25',
+        'Dinner': '17:00'        
+      }
+
       // Get the current week's date range for task due dates
       const today = new Date();
       const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -150,52 +187,120 @@ function App() {
       // Row headings for task descriptions
       const rowHeadings = ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
       
-      // Process each tile in the grid state
-      appState.gridState.forEach(tile => {
+      // Process each tile in the grid state (using ref)
+      appStateRef.current.gridState.forEach(tile => {
+        console.log(tile);
         // Skip empty tiles (state index 0)
         if (tile.stateIndex === 0) return;
         
         // Get the state label ('A', 'L', or 'B')
         const stateLabel = tileStates[tile.stateIndex].label;
+
+        // Get the assignee
+        const stateAssignee = tileStates[tile.stateIndex].todoistId;
+
+        // Get the row label ('AM 🍓', etc)
+        const rowLabel = rowHeadings[tile.rowIndex];
         
-        // Get the row description
-        const rowDesc = rowHeadings[tile.rowIndex];
+        // Get the row description and time
+        const content = contents[rowLabel];
+        const stateTime = times[rowLabel];
         
         // Calculate the due date for this task (monday + colIndex days)
         const dueDate = new Date(monday);
         dueDate.setDate(monday.getDate() + tile.colIndex);
-        const formattedDate = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const formattedDate = `${dueDate.toISOString().split('T')[0]} ${stateTime}`; // YYYY-MM-DD  HH:MM
         
         // Create a task with the appropriate content
         tasks.push({
-          content: `${stateLabel} - ${rowDesc}`,
-          description: `Task for ${rowDesc} on ${formattedDate}`,
+          label: rowLabel,
+          content,
+          assignee: stateAssignee,
           dueDate: formattedDate,
-          priority: stateLabel === 'A' ? 4 : (stateLabel === 'B' ? 2 : 3), // A=4 (highest), L=3, B=2
+          projectId: '2316749966'
         });
       });
+
+      console.log(tasks);
       
       if (tasks.length === 0) {
         setSyncStatus('No tasks to sync (all tiles are empty)');
+        setShowSyncModal(false);
         return;
       }
+
+      const groupedTasks: TodoistTask[] = [];
+      const groupableLabels = [
+        { labels: ['AM 🍓', 'AM 🫐'], content: 'Drop kids off' },
+        { labels: ['PM 🍓', 'PM 🫐'], content: 'Pick kids up' }
+      ];
+      const skippableIds: Number[] = [];
+      tasks.forEach((outerTask, outerId) => {
+        console.log(skippableIds, outerId);
+        if (skippableIds.indexOf(outerId) !== -1) {
+          console.log('skipping outer', outerId);
+          return;
+        }
+
+        let foundCombination = false;        
+        tasks.forEach((innerTask, innerId) => {
+          if (skippableIds.indexOf(innerId) !== -1) {
+            console.log('skipping inner', innerId);
+            return;
+          }
+
+          if (outerId !== innerId) {
+            groupableLabels.forEach(labelGroup => {
+              if (
+                labelGroup.labels.indexOf(outerTask.label) !== -1 &&
+                labelGroup.labels.indexOf(innerTask.label) !== -1 &&
+                outerTask.assignee === innerTask.assignee &&
+                outerTask.dueDate === innerTask.dueDate
+              ) {
+                groupedTasks.push({
+                  ...outerTask,
+                  content: labelGroup.content,
+                });
+                console.log('combination', outerTask, innerTask, JSON.stringify(groupedTasks));
+                skippableIds.push(innerId);
+                foundCombination = true;
+              }
+            });
+          }
+        });
+        console.log('found combination', outerTask, foundCombination);
+        if (!foundCombination) {
+          groupedTasks.push(outerTask);
+        }
+      });
+      console.log(groupedTasks);
       
       // Send tasks to Todoist
-      const result = await createTasks(todoistConfig, tasks);
+      const result = await createTasks(todoistConfig, groupedTasks);
       
       if (result.success) {
         setSyncStatus(`Synced ${result.totalSuccess} tasks successfully`);
       } else {
         setSyncStatus(`Synced ${result.totalSuccess} tasks, ${result.totalFailed} failed`);
       }
+      
+      // Close the modal after sync is complete
+      setShowSyncModal(false);
     } catch (error) {
       console.error('Error syncing to Todoist:', error);
       setSyncStatus('Error syncing to Todoist');
+      setShowSyncModal(false);
     }
+  };
+  
+  // Close the sync modal
+  const closeModal = () => {
+    setShowSyncModal(false);
   };
 
   return (
     <div className="App">      
+      
       <main>
         {isLoading ? (
           <div className="loading">Loading...</div>
@@ -215,23 +320,35 @@ function App() {
                   onClick={handleSave}
                   disabled={!hasUnsavedChanges}
                 >
-                  Save Changes
+                  Save
                 </button>
-              )}
-              
-              {todoistConfigValid && (
-                <>
-                  <button 
-                    className="todoist-button" 
-                    onClick={syncToTodoist}
-                    disabled={!appState}
-                  >
-                    Sync to Todoist
-                  </button>
-                </>
               )}
               {syncStatus && <p className="sync-status">{syncStatus}</p>}
             </div>
+            
+            {/* Sync Modal */}
+            {showSyncModal && (
+              <div className="modal-overlay">
+                <div className="modal-content">
+                  <h3>Changes Saved Successfully</h3>
+                  <p>Your changes have been saved. Would you like to sync to Todoist now?</p>
+                  <div className="modal-buttons">
+                    <button 
+                      className="todoist-button" 
+                      onClick={syncToTodoist}
+                    >
+                      Sync to Todoist
+                    </button>
+                    <button 
+                      className="cancel-button" 
+                      onClick={closeModal}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>

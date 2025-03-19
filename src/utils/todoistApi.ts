@@ -1,10 +1,11 @@
 // Todoist API service
 interface TodoistConfig {
   apiToken: string;
-  projectId?: string;
 }
 
 export interface TodoistTask {
+  assignee?: string;
+  label: string;
   content: string;
   description?: string;
   projectId?: string;
@@ -30,10 +31,9 @@ export const createTask = async (
       body: JSON.stringify({
         content: task.content,
         description: task.description || '',
-        project_id: task.projectId || config.projectId,
-        due_date: task.dueDate,
-        priority: task.priority,
-        labels: task.labels,
+        project_id: task.projectId,
+        due_datetime: task.dueDate,
+        assignee_id: task.assignee || null
       }),
     });
 

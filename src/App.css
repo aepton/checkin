@@ -42,7 +42,7 @@ main {
   .button-container {
     width: 25%;
     position: fixed;
-    top: 0;
+    bottom: 0;
     right: 0;
   }
 }
@@ -107,4 +107,67 @@ main {
     top: 50px;
     right: 10px;
   }
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (min-width: 500px) {
+  .modal-buttons {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.cancel-button {
+  background-color: #f2f2f2;
+  color: #333;
+  border: 1px solid #ccc;
+  padding: 8px 16px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 14px;
+  margin: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+  width: 100%;
+  max-width: 200px;
+}
+
+.cancel-button:hover {
+  background-color: #e6e6e6;
 }
