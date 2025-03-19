@@ -16,8 +16,8 @@ function App() {
   const tileStates = [
     { label: ' ', color: '#f0f0f0' },
     { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
-    { label: 'L', color: '#FDAEA9' },
-    { label: 'B', color: '#F0CA86', todoistId: '35630104,' }
+    { label: 'L', color: '#FDAEA9', todoIstId: '35677852' },
+    { label: 'B', color: '#F0CA86', todoistId: '35630104,35677852' }
   ];
   
   // State for the app
@@ -274,9 +274,24 @@ function App() {
         }
       });
       console.log(groupedTasks);
+
+      // Ungroup tasks where the assignee field contains a separator, i.e. multiple assignees
+      const ungroupedTasks: TodoistTask[] = [];
+      groupedTasks.forEach(task => {
+        if (task.assignee && task.assignee.indexOf(',') !== -1) {
+          task.assignee.split(',').forEach(assignee => {
+            ungroupedTasks.push({
+              ...task,
+              assignee
+            });
+          });
+        } else {
+          ungroupedTasks.push(task);
+        }
+      });
       
       // Send tasks to Todoist
-      const result = await createTasks(todoistConfig, groupedTasks);
+      const result = await createTasks(todoistConfig, ungroupedTasks);
       
       if (result.success) {
         setSyncStatus(`Synced ${result.totalSuccess} tasks successfully`);
