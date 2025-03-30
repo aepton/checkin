@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Tile, { TileState } from './Tile';
+import { getMondayWithOffset } from '../utils/dates';
 import './Grid.css';
 import { AppState } from '../utils/digitalOceanStorage';
 
@@ -9,18 +10,22 @@ type GridProps = {
   states: TileState[];
   initialState?: AppState | null;
   onStateChange?: (state: AppState) => void;
+  weekOffset?: number;
+  onWeekChange?: (offset: number) => void;
 };
 
-const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStateChange }) => {
-  // Generate column headings with dates for current week
+const Grid: React.FC<GridProps> = ({ 
+  rows, 
+  columns, 
+  states, 
+  initialState, 
+  onStateChange,
+  weekOffset = 0,
+  onWeekChange
+}) => {
+  // Generate column headings with dates for current week with offset
   const getWeekDates = () => {
-    const today = new Date();
-    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    // Calculate Monday's date (go back to Monday of current week)
-    const monday = new Date(today);
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Handle Sunday as special case
-    monday.setDate(today.getDate() - daysFromMonday);
+    const monday = getMondayWithOffset(weekOffset);
     
     // Generate array of dates for Monday-Friday
     const weekDates = [];
@@ -46,17 +51,20 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
   
   const [columnHeadings, setColumnHeadings] = useState<string[]>(getWeekDates());
   
-  // Update headings on window resize
+  // Update headings when window resizes or week offset changes
   useEffect(() => {
     const handleResize = () => {
       setColumnHeadings(getWeekDates());
     };
     
+    // Set column headings when week offset changes
+    setColumnHeadings(getWeekDates());
+    
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [weekOffset]);
   
   // Generate row headings
   const getRowHeadings = () => {
@@ -100,7 +108,7 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
       }
       setGridState(initialGridState);
     }
-  }, [initialState, rowHeadings.length, columnHeadings.length]);
+  }, [initialState, rowHeadings.length, columnHeadings.length, weekOffset]);
 
   // Notify parent component of state changes only when gridState changes
   useEffect(() => {
@@ -134,34 +142,54 @@ const Grid: React.FC<GridProps> = ({ rows, columns, states, initialState, onStat
   };
 
   return (
-    <div className="grid-container">
-      {/* Top row with column headings */}
-      <div className="grid-row header-row">
-        <div className="grid-cell corner-cell"></div>
-        {columnHeadings.map((heading, index) => (
-          <div key={`col-${index}`} className="grid-cell header-cell">
-            {heading}
-          </div>
-        ))}
+    <div className="grid-container-wrapper">
+      {/* Navigation controls */}
+      <div className="grid-navigation">
+        <button 
+          className="nav-button nav-prev"
+          onClick={() => onWeekChange && onWeekChange(weekOffset - 1)}
+          aria-label="Previous week"
+        >
+          ←
+        </button>
+        <button 
+          className="nav-button nav-next"
+          onClick={() => onWeekChange && onWeekChange(weekOffset + 1)}
+          aria-label="Next week"
+        >
+          →
+        </button>
       </div>
 
-      {/* Grid rows with row headings and tiles */}
-      {rowHeadings.map((rowHeading, rowIndex) => (
-        <div key={`row-${rowIndex}`} className="grid-row">
-          <div className="grid-cell header-cell">{rowHeading}</div>
-          {Array.from({ length: columns }, (_, colIndex) => (
-            <div key={`tile-${rowIndex}-${colIndex}`} className="grid-cell">
-              <Tile 
-                states={states} 
-                initialState={getTileState(rowIndex, colIndex)}
-                onStateChange={(newStateIndex) => 
-                  handleTileStateChange(rowIndex, colIndex, newStateIndex)
-                }
-              />
+      <div className="grid-container">
+        {/* Top row with column headings */}
+        <div className="grid-row header-row">
+          <div className="grid-cell corner-cell"></div>
+          {columnHeadings.map((heading, index) => (
+            <div key={`col-${index}`} className="grid-cell header-cell">
+              {heading}
             </div>
           ))}
         </div>
-      ))}
+
+        {/* Grid rows with row headings and tiles */}
+        {rowHeadings.map((rowHeading, rowIndex) => (
+          <div key={`row-${rowIndex}`} className="grid-row">
+            <div className="grid-cell header-cell">{rowHeading}</div>
+            {Array.from({ length: columns }, (_, colIndex) => (
+              <div key={`tile-${rowIndex}-${colIndex}`} className="grid-cell">
+                <Tile 
+                  states={states} 
+                  initialState={getTileState(rowIndex, colIndex)}
+                  onStateChange={(newStateIndex) => 
+                    handleTileStateChange(rowIndex, colIndex, newStateIndex)
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

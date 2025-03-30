@@ -1,4 +1,5 @@
 import AWS from 'aws-sdk';
+import { formatDate } from './dates';
 
 // Configuration interface
 interface DOSpacesConfig {
@@ -68,16 +69,16 @@ export const saveState = async (
   config: DOSpacesConfig,
   key: string,
   state: AppState,
-  routeName?: string
+  weekDate: Date,
+  routeName?: string,
 ): Promise<boolean> => {
-  try {
-    console.log(state);
+  try {    
     const s3 = initializeStorage(config);
     const storageKey = routeName ? getKeyForRoute(key, routeName) : key;
-    
+
     await s3.putObject({
       Bucket: config.bucket,
-      Key: storageKey,
+      Key: `${storageKey}/${formatDate(weekDate)}`,
       Body: JSON.stringify(state),
       ContentType: 'application/json',
       ACL: 'private',
@@ -96,6 +97,7 @@ export const saveState = async (
 export const loadState = async (
   config: DOSpacesConfig,
   key: string,
+  weekDate: Date,
   routeName?: string
 ): Promise<AppState | null> => {
   try {
@@ -104,7 +106,7 @@ export const loadState = async (
     
     const data = await s3.getObject({
       Bucket: config.bucket,
-      Key: storageKey,
+      Key: `${storageKey}/${formatDate(weekDate)}`,
     }).promise();
     
     if (data.Body) {

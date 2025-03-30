@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import './App.css';
 import Grid from './components/Grid';
+import { getMondayWithOffset } from './utils/dates';
 import { AppState, loadState, saveState, listSavedStates } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
 import { doSpacesConfig, appConfig, todoistConfig } from './config';
@@ -11,12 +12,13 @@ import { group } from 'console';
 function App() {
   // Get the route parameter from the URL
   const { routeName } = useParams<{ routeName: string }>();
+  const isSaveable = routeName?.toLowerCase() === 'berrypatch';
   
   // Define the states for the tiles (letters that will cycle through)
   const tileStates = [
     { label: ' ', color: '#f0f0f0' },
     { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
-    { label: 'L', color: '#FDAEA9', todoIstId: '35677852' },
+    { label: 'L', color: '#FDAEA9', todoistId: '35677852' },
     { label: 'B', color: '#F0CA86' }
   ];
   
@@ -29,6 +31,7 @@ function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
+  const [weekOffset, setWeekOffset] = useState<number>(0);
   
   // Ref to store the latest state without triggering re-renders
   const appStateRef = useRef<AppState | null>(null);
@@ -69,6 +72,7 @@ function App() {
           const loadedState = await loadState(
             doSpacesConfig, 
             appConfig.defaultStateKey,
+            getMondayWithOffset(weekOffset),
             routeName
           );
           
@@ -107,7 +111,7 @@ function App() {
     };
 
     fetchState();
-  }, [configValid, routeName]);
+  }, [configValid, routeName, weekOffset]);
 
   // Handle state changes from Grid component
   const handleStateChange = (newState: AppState) => {
@@ -120,28 +124,25 @@ function App() {
 
   // Save state to Digital Ocean Spaces
   const handleSave = async () => {
-    console.log('handling save', configValid, appStateRef.current);
     // Use ref instead of state to avoid timing issues
-    if (!configValid || !appStateRef.current) return;
-    
+    if (!configValid || !appStateRef.current || !isSaveable) return;
     setSaveStatus('Saving...');
     try {
       const saved = await saveState(
         doSpacesConfig,
         appConfig.defaultStateKey,
         appStateRef.current, // Use ref instead of state
+        getMondayWithOffset(weekOffset),
         routeName
       );
-
-      console.log('saved', saved);
       
       if (saved) {
         setSaveStatus(`Saved "${routeName}" successfully`);
         setHasUnsavedChanges(false);
         
-        // Show the sync modal when save is successful
+        // Automatically sync to Todoist without prompting
         if (todoistConfigValid) {
-          setShowSyncModal(true);
+          syncToTodoist();
         }
       } else {
         setSaveStatus('Error saving state');
@@ -154,7 +155,7 @@ function App() {
   
   // Sync tasks to Todoist
   const syncToTodoist = async () => {
-    if (!todoistConfigValid || !appStateRef.current) return;
+    if (!todoistConfigValid || !appStateRef.current || !isSaveable) return;
     
     setSyncStatus('Syncing to Todoist...');
     try {
@@ -174,12 +175,7 @@ function App() {
         'Dinner': '17:00'        
       }
 
-      // Get the current week's date range for task due dates
-      const today = new Date();
-      const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - daysFromMonday);
+      const monday = getMondayWithOffset(weekOffset);
       
       // Create tasks from tiles with states other than empty (index 0)
       const tasks: TodoistTask[] = [];
@@ -189,7 +185,6 @@ function App() {
       
       // Process each tile in the grid state (using ref)
       appStateRef.current.gridState.forEach(tile => {
-        console.log(tile);
         // Skip empty tiles (state index 0)
         if (tile.stateIndex === 0) return;
         
@@ -220,8 +215,6 @@ function App() {
           projectId: '2316749966'
         });
       });
-
-      console.log(tasks);
       
       if (tasks.length === 0) {
         setSyncStatus('No tasks to sync (all tiles are empty)');
@@ -236,16 +229,13 @@ function App() {
       ];
       const skippableIds: Number[] = [];
       tasks.forEach((outerTask, outerId) => {
-        console.log(skippableIds, outerId);
         if (skippableIds.indexOf(outerId) !== -1) {
-          console.log('skipping outer', outerId);
           return;
         }
 
         let foundCombination = false;        
         tasks.forEach((innerTask, innerId) => {
           if (skippableIds.indexOf(innerId) !== -1) {
-            console.log('skipping inner', innerId);
             return;
           }
 
@@ -261,19 +251,16 @@ function App() {
                   ...outerTask,
                   content: labelGroup.content,
                 });
-                console.log('combination', outerTask, innerTask, JSON.stringify(groupedTasks));
                 skippableIds.push(innerId);
                 foundCombination = true;
               }
             });
           }
         });
-        console.log('found combination', outerTask, foundCombination);
         if (!foundCombination) {
           groupedTasks.push(outerTask);
         }
       });
-      console.log(groupedTasks);
 
       // Ungroup tasks where the assignee field contains a separator, i.e. multiple assignees
       const ungroupedTasks: TodoistTask[] = [];
@@ -327,9 +314,11 @@ function App() {
               states={tileStates}
               initialState={appState}
               onStateChange={handleStateChange}
+              weekOffset={weekOffset}
+              onWeekChange={setWeekOffset}
             />
             <div className="button-container">
-              {configValid && (
+              {configValid && isSaveable && (
                 <button 
                   className="save-button" 
                   onClick={handleSave}
