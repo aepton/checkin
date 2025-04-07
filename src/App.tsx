@@ -1,13 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import './App.css';
 import Grid from './components/Grid';
 import { getMondayWithOffset } from './utils/dates';
 import { AppState, loadState, saveState, listSavedStates } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
-import { doSpacesConfig, appConfig, todoistConfig } from './config';
-import { config } from 'process';
-import { group } from 'console';
+import { 
+  initGoogleCalendarClient, 
+  authorizeCalendar, 
+  isAuthorized, 
+  createEvents, 
+  GoogleCalendarEvent 
+} from './utils/googleCalendarApi';
+import { 
+  doSpacesConfig, 
+  appConfig, 
+  todoistConfig, 
+  googleCalendarConfig 
+} from './config';
 
 function App() {
   // Get the route parameter from the URL
@@ -25,13 +35,20 @@ function App() {
   // State for the app
   const [appState, setAppState] = useState<AppState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [saveStatus, setSaveStatus] = useState<string>('');
   const [configValid, setConfigValid] = useState<boolean>(false);
   const [todoistConfigValid, setTodoistConfigValid] = useState<boolean>(false);
+  const [googleCalendarConfigValid, setGoogleCalendarConfigValid] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [calendarSyncStatus, setCalendarSyncStatus] = useState<string>('');
+  
+  // Used for status messages in console and UI updates, but not directly rendered
+  const setSaveStatus = (status: string) => {
+    console.log('Save status:', status);
+  };
+  const [, setGoogleCalendarAuthorized] = useState<boolean>(false);
   
   // Ref to store the latest state without triggering re-renders
   const appStateRef = useRef<AppState | null>(null);
@@ -58,6 +75,25 @@ function App() {
     
     if (!isTodoistValid) {
       console.warn('Todoist API configuration is incomplete. Sync to Todoist will be disabled.');
+    }
+
+    // Google Calendar config check
+    const isGoogleCalendarValid = Boolean(
+      googleCalendarConfig.clientId && 
+      googleCalendarConfig.apiKey
+    );
+    setGoogleCalendarConfigValid(isGoogleCalendarValid);
+    
+    if (!isGoogleCalendarValid) {
+      console.warn('Google Calendar configuration is incomplete. Sync to Google Calendar will be disabled.');
+    } else {
+      // Initialize Google Calendar client
+      initGoogleCalendarClient(googleCalendarConfig)
+        .then(initialized => {
+          if (!initialized) {
+            console.warn('Failed to initialize Google Calendar client');
+          }
+        });
     }
   }, []);
 
@@ -88,16 +124,17 @@ function App() {
           
           // Load list of available routes
           try {
-            const savedStates = await listSavedStates(
+            await listSavedStates(
               doSpacesConfig,
               appConfig.stateKeyPrefix
             );
             
+            // Route data used elsewhere, commented out for now
             // Extract route names from keys
-            const routes = savedStates.map(key => {
-              const parts = key.split('/');
-              return parts[parts.length - 1];
-            });
+            // const routes = savedStates.map(key => {
+            //   const parts = key.split('/');
+            //   return parts[parts.length - 1];
+            // });
           } catch (error) {
             console.error('Error listing saved states:', error);
           }
@@ -153,70 +190,104 @@ function App() {
     }
   };
   
+  // Function to create tasks/events data
+  const createTasksData = () => {
+    const contents: { [key: string]: string } = {
+      'AM 🍓': 'Drop off Imogen',
+      'AM 🫐': 'Drop off Ida',
+      'PM 🍓': 'Pick up Imogen',
+      'PM 🫐': 'Pick up Ida',
+      'Dinner': 'Cook dinner',
+    };
+    
+    const times: { [key: string]: { start: string; end: string } } = {
+      'AM 🍓': { start: '08:00', end: '08:30' },
+      'AM 🫐': { start: '08:00', end: '08:30' },
+      'PM 🍓': { start: '16:25', end: '17:00' },
+      'PM 🫐': { start: '16:25', end: '17:00' },
+      'Dinner': { start: '17:00', end: '18:00' }        
+    };
+
+    const monday = getMondayWithOffset(weekOffset);
+    
+    // Row headings for task descriptions
+    const rowHeadings = ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
+    
+    // Data structures to hold tasks and events
+    const todoistTasks: TodoistTask[] = [];
+    const calendarEvents: GoogleCalendarEvent[] = [];
+    
+    // Process each tile in the grid state (using ref)
+    if (!appStateRef.current) return { todoistTasks, calendarEvents };
+    
+    appStateRef.current.gridState.forEach(tile => {
+      // Skip empty tiles (state index 0)
+      if (tile.stateIndex === 0) return;
+      
+      // Get the state label ('A', 'L', or 'B')
+      const stateLabel = tileStates[tile.stateIndex].label;
+
+      // Get the assignee
+      const stateAssignee = tileStates[tile.stateIndex].todoistId;
+
+      // Get the row label ('AM 🍓', etc)
+      const rowLabel = rowHeadings[tile.rowIndex];
+      
+      // Get the row description and time
+      const content = contents[rowLabel];
+      const stateStartTime = times[rowLabel].start;
+      const stateEndTime = times[rowLabel].end;
+      
+      // Calculate the due date for this task (monday + colIndex days)
+      const taskDate = new Date(monday);
+      taskDate.setDate(monday.getDate() + tile.colIndex);
+      
+      // Format for Todoist
+      const formattedTaskDate = `${taskDate.toISOString().split('T')[0]} ${stateStartTime}`; // YYYY-MM-DD HH:MM
+      
+      // Format for Google Calendar
+      const startDateTime = new Date(taskDate);
+      startDateTime.setHours(
+        parseInt(stateStartTime.split(':')[0], 10), 
+        parseInt(stateStartTime.split(':')[1], 10)
+      );
+      
+      const endDateTime = new Date(taskDate);
+      endDateTime.setHours(
+        parseInt(stateEndTime.split(':')[0], 10), 
+        parseInt(stateEndTime.split(':')[1], 10)
+      );
+      
+      // Create a Todoist task
+      todoistTasks.push({
+        label: rowLabel,
+        content,
+        assignee: stateAssignee,
+        dueDate: formattedTaskDate,
+        projectId: todoistConfig.projectId || '2316749966'
+      });
+      
+      // Create a Google Calendar event
+      calendarEvents.push({
+        summary: content,
+        description: `Assigned to: ${stateLabel}`,
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString()
+      });
+    });
+    
+    return { todoistTasks, calendarEvents };
+  };
+
   // Sync tasks to Todoist
   const syncToTodoist = async () => {
     if (!todoistConfigValid || !appStateRef.current || !isSaveable) return;
     
     setSyncStatus('Syncing to Todoist...');
     try {
-      const contents: { [key: string]: string } = {
-        'AM 🍓': 'Drop off Imogen',
-        'AM 🫐': 'Drop off Ida',
-        'PM 🍓': 'Pick up Imogen',
-        'PM 🫐': 'Pick up Ida',
-        'Dinner': 'Cook dinner',
-
-      };
-      const times: { [key: string]: string } = {
-        'AM 🍓': '08:00',
-        'AM 🫐': '08:00',
-        'PM 🍓': '16:25',
-        'PM 🫐': '16:25',
-        'Dinner': '17:00'        
-      }
-
-      const monday = getMondayWithOffset(weekOffset);
+      const { todoistTasks } = createTasksData();
       
-      // Create tasks from tiles with states other than empty (index 0)
-      const tasks: TodoistTask[] = [];
-      
-      // Row headings for task descriptions
-      const rowHeadings = ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
-      
-      // Process each tile in the grid state (using ref)
-      appStateRef.current.gridState.forEach(tile => {
-        // Skip empty tiles (state index 0)
-        if (tile.stateIndex === 0) return;
-        
-        // Get the state label ('A', 'L', or 'B')
-        const stateLabel = tileStates[tile.stateIndex].label;
-
-        // Get the assignee
-        const stateAssignee = tileStates[tile.stateIndex].todoistId;
-
-        // Get the row label ('AM 🍓', etc)
-        const rowLabel = rowHeadings[tile.rowIndex];
-        
-        // Get the row description and time
-        const content = contents[rowLabel];
-        const stateTime = times[rowLabel];
-        
-        // Calculate the due date for this task (monday + colIndex days)
-        const dueDate = new Date(monday);
-        dueDate.setDate(monday.getDate() + tile.colIndex);
-        const formattedDate = `${dueDate.toISOString().split('T')[0]} ${stateTime}`; // YYYY-MM-DD  HH:MM
-        
-        // Create a task with the appropriate content
-        tasks.push({
-          label: rowLabel,
-          content,
-          assignee: stateAssignee,
-          dueDate: formattedDate,
-          projectId: '2316749966'
-        });
-      });
-      
-      if (tasks.length === 0) {
+      if (todoistTasks.length === 0) {
         setSyncStatus('No tasks to sync (all tiles are empty)');
         setShowSyncModal(false);
         return;
@@ -228,13 +299,13 @@ function App() {
         { labels: ['PM 🍓', 'PM 🫐'], content: 'Pick kids up' }
       ];
       const skippableIds: Number[] = [];
-      tasks.forEach((outerTask, outerId) => {
+      todoistTasks.forEach((outerTask, outerId) => {
         if (skippableIds.indexOf(outerId) !== -1) {
           return;
         }
 
         let foundCombination = false;        
-        tasks.forEach((innerTask, innerId) => {
+        todoistTasks.forEach((innerTask, innerId) => {
           if (skippableIds.indexOf(innerId) !== -1) {
             return;
           }
@@ -288,10 +359,60 @@ function App() {
       
       // Close the modal after sync is complete
       setShowSyncModal(false);
+      
+      // After Todoist sync, also sync to Google Calendar if configured and authorized
+      if (googleCalendarConfigValid && isAuthorized()) {
+        syncToGoogleCalendar();
+      }
     } catch (error) {
       console.error('Error syncing to Todoist:', error);
       setSyncStatus('Error syncing to Todoist');
       setShowSyncModal(false);
+    }
+  };
+  
+  // Sync events to Google Calendar
+  const syncToGoogleCalendar = async () => {
+    if (!googleCalendarConfigValid || !appStateRef.current || !isSaveable) return;
+    
+    // Check if authorized, if not request authorization
+    if (!isAuthorized()) {
+      try {
+        setCalendarSyncStatus('Requesting Google Calendar authorization...');
+        const authorized = await authorizeCalendar();
+        setGoogleCalendarAuthorized(authorized);
+        
+        if (!authorized) {
+          setCalendarSyncStatus('Google Calendar authorization failed');
+          return;
+        }
+      } catch (error) {
+        console.error('Error authorizing Google Calendar:', error);
+        setCalendarSyncStatus('Google Calendar authorization failed');
+        return;
+      }
+    }
+    
+    setCalendarSyncStatus('Syncing to Google Calendar...');
+    try {
+      const { calendarEvents } = createTasksData();
+      
+      if (calendarEvents.length === 0) {
+        setCalendarSyncStatus('No events to sync (all tiles are empty)');
+        return;
+      }
+      
+      // Send events to Google Calendar
+      const result = await createEvents(googleCalendarConfig, calendarEvents);
+      
+      if (result.success) {
+        setCalendarSyncStatus(`Synced ${result.totalSuccess} events successfully to Google Calendar`);
+      } else {
+        setCalendarSyncStatus(`Synced ${result.totalSuccess} events, ${result.totalFailed} failed to Google Calendar`);
+      }
+    } catch (error) {
+      console.error('Error syncing to Google Calendar:', error);
+      setCalendarSyncStatus('Error syncing to Google Calendar');
     }
   };
   
@@ -327,7 +448,24 @@ function App() {
                   Save
                 </button>
               )}
+              {todoistConfigValid && isSaveable && (
+                <button 
+                  className="todoist-button" 
+                  onClick={syncToTodoist}
+                >
+                  Sync to Todoist
+                </button>
+              )}
+              {googleCalendarConfigValid && isSaveable && (
+                <button 
+                  className="calendar-button" 
+                  onClick={syncToGoogleCalendar}
+                >
+                  Sync to Google Calendar
+                </button>
+              )}
               {syncStatus && <p className="sync-status">{syncStatus}</p>}
+              {calendarSyncStatus && <p className="calendar-sync-status">{calendarSyncStatus}</p>}
             </div>
             
             {/* Sync Modal */}
@@ -335,14 +473,24 @@ function App() {
               <div className="modal-overlay">
                 <div className="modal-content">
                   <h3>Changes Saved Successfully</h3>
-                  <p>Your changes have been saved. Would you like to sync to Todoist now?</p>
+                  <p>Your changes have been saved. Would you like to sync to your task services now?</p>
                   <div className="modal-buttons">
-                    <button 
-                      className="todoist-button" 
-                      onClick={syncToTodoist}
-                    >
-                      Sync to Todoist
-                    </button>
+                    {todoistConfigValid && (
+                      <button 
+                        className="todoist-button" 
+                        onClick={syncToTodoist}
+                      >
+                        Sync to Todoist
+                      </button>
+                    )}
+                    {googleCalendarConfigValid && (
+                      <button 
+                        className="calendar-button" 
+                        onClick={syncToGoogleCalendar}
+                      >
+                        Sync to Google Calendar
+                      </button>
+                    )}
                     <button 
                       className="cancel-button" 
                       onClick={closeModal}
