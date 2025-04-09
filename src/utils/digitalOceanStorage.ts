@@ -20,6 +20,7 @@ export interface AppState {
 }
 
 const READER_FUNCTION_URL = 'https://faas-sfo3-7872a1dd.doserverless.co/api/v1/web/fn-db6c84e6-3d28-416d-9c58-b01c0e7fa4c6/default/reader';
+const SAVER_FUNCTION_URL = 'https://faas-sfo3-7872a1dd.doserverless.co/api/v1/web/fn-db6c84e6-3d28-416d-9c58-b01c0e7fa4c6/default/saver';
 
 // Create a singleton for the S3 client
 let s3Client: AWS.S3 | null = null;
@@ -68,25 +69,24 @@ export const getKeyForRoute = (baseKey: string, routeName: string): string => {
  * Save the app state to Digital Ocean Spaces
  */
 export const saveState = async (
-  config: DOSpacesConfig,
-  key: string,
   state: AppState,
   weekDate: Date,
   routeName?: string,
 ): Promise<boolean> => {
-  try {    
-    const s3 = initializeStorage(config);
-    const storageKey = routeName ? getKeyForRoute(key, routeName) : key;
+  try {
+    const response = await fetch(`${SAVER_FUNCTION_URL}?namespace=${encodeURIComponent(routeName || '').toLowerCase()}&date=${encodeURIComponent(formatDate(weekDate))}&data=${encodeURIComponent(JSON.stringify(state))}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });    
 
-    await s3.putObject({
-      Bucket: config.bucket,
-      Key: `${storageKey.toLocaleLowerCase()}/${formatDate(weekDate)}`,
-      Body: JSON.stringify(state),
-      ContentType: 'application/json',
-      ACL: 'private',
-    }).promise();
-    
-    return true;
+    if (!response.ok) {
+      throw new Error(`Failed to load state: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.success == true;
   } catch (error) {
     console.error('Error saving state to DO Spaces:', error);
     return false;
@@ -97,8 +97,6 @@ export const saveState = async (
  * Load the app state from Digital Ocean Spaces
  */
 export const loadState = async (
-  config: DOSpacesConfig,
-  key: string,
   weekDate: Date,
   routeName?: string
 ): Promise<AppState | null> => {
@@ -157,30 +155,5 @@ export const deleteState = async (
   } catch (error) {
     console.error('Error deleting state from DO Spaces:', error);
     return false;
-  }
-};
-
-/**
- * List all saved states in Digital Ocean Spaces
- */
-export const listSavedStates = async (
-  config: DOSpacesConfig,
-  prefix: string
-): Promise<string[]> => {
-  try {
-    const s3 = initializeStorage(config);
-    
-    const data = await s3.listObjectsV2({
-      Bucket: config.bucket,
-      Prefix: prefix,
-    }).promise();
-    
-    if (data.Contents) {
-      return data.Contents.map(item => item.Key || '').filter(key => key !== '');
-    }
-    return [];
-  } catch (error) {
-    console.error('Error listing saved states from DO Spaces:', error);
-    return [];
   }
 };

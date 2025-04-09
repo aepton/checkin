@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import './App.css';
 import Grid from './components/Grid';
 import { getMondayWithOffset } from './utils/dates';
-import { AppState, loadState, saveState, listSavedStates } from './utils/digitalOceanStorage';
+import { AppState, loadState, saveState } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
 import { 
   initGoogleCalendarClient, 
@@ -13,8 +13,6 @@ import {
   GoogleCalendarEvent 
 } from './utils/googleCalendarApi';
 import { 
-  doSpacesConfig, 
-  appConfig, 
   todoistConfig, 
   googleCalendarConfig 
 } from './config';
@@ -55,20 +53,6 @@ function App() {
 
   // Check if the configurations are valid
   useEffect(() => {
-    // Digital Ocean Spaces config check
-    const isValid = Boolean(
-      doSpacesConfig.accessKeyId && 
-      doSpacesConfig.secretAccessKey && 
-      doSpacesConfig.endpoint && 
-      doSpacesConfig.bucket
-    );
-    
-    setConfigValid(isValid);
-    
-    if (!isValid) {
-      console.warn('Digital Ocean Spaces configuration is incomplete. Local storage will be used instead.');
-    }
-    
     // Todoist config check
     const isTodoistValid = Boolean(todoistConfig.apiToken);
     setTodoistConfigValid(isTodoistValid);
@@ -104,46 +88,25 @@ function App() {
     const fetchState = async () => {
       setIsLoading(true);
       
-      if (configValid) {
-        try {
-          // Load state for the current route
-          const loadedState = await loadState(
-            doSpacesConfig, 
-            appConfig.defaultStateKey,
-            getMondayWithOffset(weekOffset),
-            routeName
-          );
-          
-          setAppState(loadedState);
-          // Also update ref
-          appStateRef.current = loadedState;
-          
-          if (loadedState) {
-            setSaveStatus(`State for "${routeName}" loaded successfully`);
-          } else {
-            setSaveStatus(`No saved state found for "${routeName}", using defaults`);
-          }
-          
-          // Load list of available routes
-          try {
-            await listSavedStates(
-              doSpacesConfig,
-              appConfig.stateKeyPrefix
-            );
-            
-            // Route data used elsewhere, commented out for now
-            // Extract route names from keys
-            // const routes = savedStates.map(key => {
-            //   const parts = key.split('/');
-            //   return parts[parts.length - 1];
-            // });
-          } catch (error) {
-            console.error('Error listing saved states:', error);
-          }
-        } catch (error) {
-          console.error('Error loading state:', error);
-          setSaveStatus('Error loading state');
+      try {
+        // Load state for the current route
+        const loadedState = await loadState(
+          getMondayWithOffset(weekOffset),
+          routeName
+        );
+        
+        setAppState(loadedState);
+        // Also update ref
+        appStateRef.current = loadedState;
+        
+        if (loadedState) {
+          setSaveStatus(`State for "${routeName}" loaded successfully`);
+        } else {
+          setSaveStatus(`No saved state found for "${routeName}", using defaults`);
         }
+      } catch (error) {
+        console.error('Error loading state:', error);
+        setSaveStatus('Error loading state');
       }
       
       setIsLoading(false);
@@ -164,12 +127,10 @@ function App() {
   // Save state to Digital Ocean Spaces
   const handleSave = async () => {
     // Use ref instead of state to avoid timing issues
-    if (!configValid || !appStateRef.current || !isSaveable) return;
+    if (!appStateRef.current || !isSaveable) return;
     setSaveStatus('Saving...');
     try {
       const saved = await saveState(
-        doSpacesConfig,
-        appConfig.defaultStateKey,
         appStateRef.current, // Use ref instead of state
         getMondayWithOffset(weekOffset),
         routeName
@@ -441,7 +402,7 @@ function App() {
               onWeekChange={setWeekOffset}
             />
             <div className="button-container">
-              {configValid && isSaveable && (
+              {isSaveable && (
                 <button 
                   className="save-button" 
                   onClick={handleSave}
