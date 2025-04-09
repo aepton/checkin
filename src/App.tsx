@@ -28,7 +28,7 @@ function App() {
   const tileStates = [
     { label: ' ', color: '#f0f0f0' },
     { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
-    { label: 'L', color: '#FDAEA9', todoistId: '35677852' },
+    { label: 'L', color: '#FDAEA9', calendar: true },
     { label: 'B', color: '#F0CA86' }
   ];
   
@@ -40,9 +40,9 @@ function App() {
   const [googleCalendarConfigValid, setGoogleCalendarConfigValid] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
-  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [calendarSyncStatus, setCalendarSyncStatus] = useState<string>('');
+  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   
   // Used for status messages in console and UI updates, but not directly rendered
   const setSaveStatus = (status: string) => {
@@ -92,6 +92,8 @@ function App() {
         .then(initialized => {
           if (!initialized) {
             console.warn('Failed to initialize Google Calendar client');
+          } else {
+            setGoogleCalendarAuthorized(true);
           }
         });
     }
@@ -223,12 +225,12 @@ function App() {
     appStateRef.current.gridState.forEach(tile => {
       // Skip empty tiles (state index 0)
       if (tile.stateIndex === 0) return;
-      
-      // Get the state label ('A', 'L', or 'B')
-      const stateLabel = tileStates[tile.stateIndex].label;
 
       // Get the assignee
       const stateAssignee = tileStates[tile.stateIndex].todoistId;
+
+      // Determine whether to add to calendar
+      const calendar = tileStates[tile.stateIndex].calendar || false;
 
       // Get the row label ('AM 🍓', etc)
       const rowLabel = rowHeadings[tile.rowIndex];
@@ -245,38 +247,100 @@ function App() {
       // Format for Todoist
       const formattedTaskDate = `${taskDate.toISOString().split('T')[0]} ${stateStartTime}`; // YYYY-MM-DD HH:MM
       
-      // Format for Google Calendar
-      const startDateTime = new Date(taskDate);
-      startDateTime.setHours(
-        parseInt(stateStartTime.split(':')[0], 10), 
-        parseInt(stateStartTime.split(':')[1], 10)
-      );
-      
-      const endDateTime = new Date(taskDate);
-      endDateTime.setHours(
-        parseInt(stateEndTime.split(':')[0], 10), 
-        parseInt(stateEndTime.split(':')[1], 10)
-      );
-      
       // Create a Todoist task
       todoistTasks.push({
         label: rowLabel,
         content,
         assignee: stateAssignee,
         dueDate: formattedTaskDate,
-        projectId: todoistConfig.projectId || '2316749966'
+        projectId: todoistConfig.projectId || '2316749966',
+        taskDate,
+        stateStartTime,
+        stateEndTime,
+        calendar
       });
+    });
+
+    const groupedTasks: TodoistTask[] = [];
+    const groupableLabels = [
+      { labels: ['AM 🍓', 'AM 🫐'], content: 'Drop kids off' },
+      { labels: ['PM 🍓', 'PM 🫐'], content: 'Pick kids up' }
+    ];
+    const skippableIds: Number[] = [];
+    todoistTasks.forEach((outerTask, outerId) => {
+      if (skippableIds.indexOf(outerId) !== -1) {
+        return;
+      }
+
+      let foundCombination = false;        
+      todoistTasks.forEach((innerTask, innerId) => {
+        if (skippableIds.indexOf(innerId) !== -1) {
+          return;
+        }
+
+        if (outerId !== innerId) {
+          groupableLabels.forEach(labelGroup => {
+            if (
+              labelGroup.labels.indexOf(outerTask.label) !== -1 &&
+              labelGroup.labels.indexOf(innerTask.label) !== -1 &&
+              outerTask.assignee === innerTask.assignee &&
+              outerTask.dueDate === innerTask.dueDate
+            ) {
+              groupedTasks.push({
+                ...outerTask,
+                content: labelGroup.content,
+              });
+              skippableIds.push(innerId);
+              foundCombination = true;
+            }
+          });
+        }
+      });
+      if (!foundCombination) {
+        groupedTasks.push(outerTask);
+      }
+    });
+
+    // Ungroup tasks where the assignee field contains a separator, i.e. multiple assignees
+    const ungroupedTasks: TodoistTask[] = [];
+    groupedTasks.forEach(task => {
+      if (task.assignee && task.assignee.indexOf(',') !== -1) {
+        task.assignee.split(',').forEach(assignee => {
+          ungroupedTasks.push({
+            ...task,
+            assignee
+          });
+        });
+      } else {
+        ungroupedTasks.push(task);
+      }
+    });
+
+    ungroupedTasks.forEach(task => {
+      if (!task.calendar) return;
+
+      // Format for Google Calendar
+      const startDateTime = new Date(task.taskDate);
+      startDateTime.setHours(
+        parseInt(task.stateStartTime.split(':')[0], 10), 
+        parseInt(task.stateStartTime.split(':')[1], 10)
+      );
       
+      const endDateTime = new Date(task.taskDate);
+      endDateTime.setHours(
+        parseInt(task.stateEndTime.split(':')[0], 10), 
+        parseInt(task.stateEndTime.split(':')[1], 10)
+      );
+
       // Create a Google Calendar event
       calendarEvents.push({
-        summary: content,
-        description: `Assigned to: ${stateLabel}`,
+        summary: task.content,
         startDateTime: startDateTime.toISOString(),
         endDateTime: endDateTime.toISOString()
       });
     });
     
-    return { todoistTasks, calendarEvents };
+    return { todoistTasks: ungroupedTasks.filter(t => t.assignee), calendarEvents };
   };
 
   // Sync tasks to Todoist
@@ -289,79 +353,20 @@ function App() {
       
       if (todoistTasks.length === 0) {
         setSyncStatus('No tasks to sync (all tiles are empty)');
-        setShowSyncModal(false);
         return;
       }
-
-      const groupedTasks: TodoistTask[] = [];
-      const groupableLabels = [
-        { labels: ['AM 🍓', 'AM 🫐'], content: 'Drop kids off' },
-        { labels: ['PM 🍓', 'PM 🫐'], content: 'Pick kids up' }
-      ];
-      const skippableIds: Number[] = [];
-      todoistTasks.forEach((outerTask, outerId) => {
-        if (skippableIds.indexOf(outerId) !== -1) {
-          return;
-        }
-
-        let foundCombination = false;        
-        todoistTasks.forEach((innerTask, innerId) => {
-          if (skippableIds.indexOf(innerId) !== -1) {
-            return;
-          }
-
-          if (outerId !== innerId) {
-            groupableLabels.forEach(labelGroup => {
-              if (
-                labelGroup.labels.indexOf(outerTask.label) !== -1 &&
-                labelGroup.labels.indexOf(innerTask.label) !== -1 &&
-                outerTask.assignee === innerTask.assignee &&
-                outerTask.dueDate === innerTask.dueDate
-              ) {
-                groupedTasks.push({
-                  ...outerTask,
-                  content: labelGroup.content,
-                });
-                skippableIds.push(innerId);
-                foundCombination = true;
-              }
-            });
-          }
-        });
-        if (!foundCombination) {
-          groupedTasks.push(outerTask);
-        }
-      });
-
-      // Ungroup tasks where the assignee field contains a separator, i.e. multiple assignees
-      const ungroupedTasks: TodoistTask[] = [];
-      groupedTasks.forEach(task => {
-        if (task.assignee && task.assignee.indexOf(',') !== -1) {
-          task.assignee.split(',').forEach(assignee => {
-            ungroupedTasks.push({
-              ...task,
-              assignee
-            });
-          });
-        } else {
-          ungroupedTasks.push(task);
-        }
-      });
       
       // Send tasks to Todoist
-      const result = await createTasks(todoistConfig, ungroupedTasks);
+      const result = await createTasks(todoistConfig, todoistTasks);
       
       if (result.success) {
-        setSyncStatus(`Synced ${result.totalSuccess} tasks successfully`);
+        setSyncStatus(`Synced ${result.totalSuccess} tasks successfully to Todoist`);
       } else {
-        setSyncStatus(`Synced ${result.totalSuccess} tasks, ${result.totalFailed} failed`);
+        setSyncStatus(`Synced ${result.totalSuccess} tasks to Todoist, ${result.totalFailed} failed`);
       }
       
-      // Close the modal after sync is complete
-      setShowSyncModal(false);
-      
       // After Todoist sync, also sync to Google Calendar if configured and authorized
-      if (googleCalendarConfigValid && isAuthorized()) {
+      if (googleCalendarConfigValid) {
         syncToGoogleCalendar();
       }
     } catch (error) {
@@ -416,10 +421,7 @@ function App() {
     }
   };
   
-  // Close the sync modal
-  const closeModal = () => {
-    setShowSyncModal(false);
-  };
+  // Modal functionality removed
 
   return (
     <div className="App">      
@@ -448,59 +450,11 @@ function App() {
                   Save
                 </button>
               )}
-              {todoistConfigValid && isSaveable && (
-                <button 
-                  className="todoist-button" 
-                  onClick={syncToTodoist}
-                >
-                  Sync to Todoist
-                </button>
-              )}
-              {googleCalendarConfigValid && isSaveable && (
-                <button 
-                  className="calendar-button" 
-                  onClick={syncToGoogleCalendar}
-                >
-                  Sync to Google Calendar
-                </button>
-              )}
               {syncStatus && <p className="sync-status">{syncStatus}</p>}
               {calendarSyncStatus && <p className="calendar-sync-status">{calendarSyncStatus}</p>}
             </div>
             
-            {/* Sync Modal */}
-            {showSyncModal && (
-              <div className="modal-overlay">
-                <div className="modal-content">
-                  <h3>Changes Saved Successfully</h3>
-                  <p>Your changes have been saved. Would you like to sync to your task services now?</p>
-                  <div className="modal-buttons">
-                    {todoistConfigValid && (
-                      <button 
-                        className="todoist-button" 
-                        onClick={syncToTodoist}
-                      >
-                        Sync to Todoist
-                      </button>
-                    )}
-                    {googleCalendarConfigValid && (
-                      <button 
-                        className="calendar-button" 
-                        onClick={syncToGoogleCalendar}
-                      >
-                        Sync to Google Calendar
-                      </button>
-                    )}
-                    <button 
-                      className="cancel-button" 
-                      onClick={closeModal}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Sync Modal removed - automatically syncing now */}
           </>
         )}
       </main>

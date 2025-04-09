@@ -1,3 +1,5 @@
+import { bool } from "aws-sdk/clients/signer";
+
 // Todoist API service
 interface TodoistConfig {
   apiToken: string;
@@ -12,6 +14,12 @@ export interface TodoistTask {
   dueDate?: string;
   priority?: number; // 1-4 (4 is highest)
   labels?: string[];
+
+  // Convenience attributes for creating GCal events out of these tasks
+  calendar: boolean;
+  taskDate: Date;
+  stateStartTime: string;
+  stateEndTime: string;
 }
 
 /**

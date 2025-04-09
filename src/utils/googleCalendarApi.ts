@@ -1,5 +1,5 @@
-// Google Calendar API service
-import gapi from 'gapi-client';
+// Google Calendar API service using Google Identity Services (GIS)
+import '../types/gapi-client.d';
 
 interface GoogleCalendarConfig {
   clientId: string;
@@ -19,37 +19,50 @@ export interface GoogleCalendarEvent {
 }
 
 // Global variables to store authentication state
-let gapiInitialized = false;
-let isSignedIn = false;
+let accessToken: string | null = null;
+let tokenClient: TokenClient | null = null;
+let isInitialized = false;
 
 /**
- * Initialize Google API client
+ * Initialize Google Identity Services client
  */
 export const initGoogleCalendarClient = (config: GoogleCalendarConfig): Promise<boolean> => {
-  return new Promise((resolve) => {
-    gapi.load('client:auth2', async () => {
-      try {
-        await gapi.client.init({
-          apiKey: config.apiKey,
-          clientId: config.clientId,
-          discoveryDocs: config.discoveryDocs,
-          scope: config.scopes.join(' ')
-        });
-
-        // Listen for sign-in state changes
-        gapi.auth2.getAuthInstance().isSignedIn.listen((signedIn) => {
-          isSignedIn = signedIn;
-        });
-
-        // Set the initial sign-in state
-        isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
-        gapiInitialized = true;
-        resolve(true);
-      } catch (error) {
-        console.error('Error initializing Google API client:', error);
+  return new Promise((resolve) => {    
+    try {
+      // Check if Google Identity Services is available
+      if (!window.google || !window.google.accounts) {
+        console.error('Google Identity Services not available');
         resolve(false);
+        return;
       }
-    });
+      
+      // Initialize token client
+      tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: config.clientId,
+        scope: config.scopes.join(' '),
+        callback: (tokenResponse) => {
+          if (tokenResponse.error) {
+            console.error('Error getting access token:', tokenResponse.error);
+            resolve(false);
+            return;
+          }
+          
+          accessToken = tokenResponse.access_token;
+          isInitialized = true;
+          resolve(true);
+        },
+        error_callback: (error) => {
+          console.error('Error initializing token client:', error);
+          resolve(false);
+        }
+      });
+      
+      isInitialized = true;
+      resolve(true);
+    } catch (error) {
+      console.error('Error initializing Google Calendar client:', error);
+      resolve(false);
+    }
   });
 };
 
@@ -57,16 +70,31 @@ export const initGoogleCalendarClient = (config: GoogleCalendarConfig): Promise<
  * Request authorization from the user
  */
 export const authorizeCalendar = async (): Promise<boolean> => {
-  if (!gapiInitialized) {
+  if (!isInitialized || !tokenClient) {
     console.error('Google API client not initialized');
     return false;
   }
 
   try {
-    if (!isSignedIn) {
-      await gapi.auth2.getAuthInstance().signIn();
-    }
-    return gapi.auth2.getAuthInstance().isSignedIn.get();
+    return new Promise((resolve) => {
+      tokenClient!.callback = (tokenResponse) => {
+        if (tokenResponse.error) {
+          console.error('Error getting access token:', tokenResponse.error);
+          resolve(false);
+          return;
+        }
+        
+        accessToken = tokenResponse.access_token;
+        resolve(true);
+      };
+      
+      tokenClient!.error_callback = (error) => {
+        console.error('Authorization error:', error);
+        resolve(false);
+      };
+      
+      tokenClient!.requestAccessToken();
+    });
   } catch (error) {
     console.error('Error authorizing Google Calendar:', error);
     return false;
@@ -77,7 +105,7 @@ export const authorizeCalendar = async (): Promise<boolean> => {
  * Check if user is signed in
  */
 export const isAuthorized = (): boolean => {
-  return gapiInitialized && isSignedIn;
+  return isInitialized && accessToken !== null;
 };
 
 /**
@@ -94,7 +122,7 @@ export const createEvent = async (
 
   try {
     // Format the event for Google Calendar
-    const calendarEvent = {
+    const calendarEvent: GoogleCalendarEventResource = {
       summary: event.summary,
       description: event.description,
       location: event.location,
@@ -109,13 +137,26 @@ export const createEvent = async (
       attendees: event.attendees
     };
 
-    // Insert the event
-    const response = await gapi.client.calendar.events.insert({
-      calendarId: config.calendarId,
-      resource: calendarEvent
-    });
+    // Insert the event using fetch API
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(config.calendarId)}/events`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(calendarEvent)
+      }
+    );
 
-    return response.status === 200;
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error response from Google Calendar API:', errorData);
+      return false;
+    }
+
+    return true;
   } catch (error) {
     console.error('Error creating Google Calendar event:', error);
     return false;
@@ -157,7 +198,5 @@ export const createEvents = async (
  * Sign out of Google Calendar
  */
 export const signOut = (): void => {
-  if (gapiInitialized) {
-    gapi.auth2.getAuthInstance().signOut();
-  }
+  accessToken = null;
 };

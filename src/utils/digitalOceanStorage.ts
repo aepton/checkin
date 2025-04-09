@@ -19,6 +19,8 @@ export interface AppState {
   }[];
 }
 
+const READER_FUNCTION_URL = 'https://faas-sfo3-7872a1dd.doserverless.co/api/v1/web/fn-db6c84e6-3d28-416d-9c58-b01c0e7fa4c6/default/reader';
+
 // Create a singleton for the S3 client
 let s3Client: AWS.S3 | null = null;
 
@@ -78,7 +80,7 @@ export const saveState = async (
 
     await s3.putObject({
       Bucket: config.bucket,
-      Key: `${storageKey}/${formatDate(weekDate)}`,
+      Key: `${storageKey.toLocaleLowerCase()}/${formatDate(weekDate)}`,
       Body: JSON.stringify(state),
       ContentType: 'application/json',
       ACL: 'private',
@@ -101,16 +103,29 @@ export const loadState = async (
   routeName?: string
 ): Promise<AppState | null> => {
   try {
-    const s3 = initializeStorage(config);
-    const storageKey = routeName ? getKeyForRoute(key, routeName) : key;
-    
-    const data = await s3.getObject({
-      Bucket: config.bucket,
-      Key: `${storageKey}/${formatDate(weekDate)}`,
-    }).promise();
-    
+    const response = await fetch(`${READER_FUNCTION_URL}?namespace=${encodeURIComponent(routeName || '').toLowerCase()}&date=${encodeURIComponent(formatDate(weekDate))}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });    
+
+    if (!response.ok) {
+      throw new Error(`Failed to load state: ${response.status}`);
+    }
+
+    const data = await response.json();
+
     if (data.Body) {
+      // If Body is already a parsed object, return it directly
+      if (typeof data.Body === 'object') {
+        return data.Body;
+      }
+      // Otherwise parse it from string
       return JSON.parse(data.Body.toString());
+    } else if (data && typeof data === 'object' && data.gridState) {
+      // If we have data but no Body property, the API might be returning the state directly
+      return data;
     }
     return null;
   } catch (error) {
