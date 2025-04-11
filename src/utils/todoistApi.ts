@@ -1,5 +1,3 @@
-import { bool } from "aws-sdk/clients/signer";
-
 // Todoist API service
 interface TodoistConfig {
   apiToken: string;
@@ -22,6 +20,9 @@ export interface TodoistTask {
   stateEndTime: string;
 }
 
+const TODOIST_FUNCTION_URL = 'https://faas-sfo3-7872a1dd.doserverless.co/api/v1/web/fn-db6c84e6-3d28-416d-9c58-b01c0e7fa4c6/default/todoist';
+
+
 /**
  * Create a new task in Todoist
  */
@@ -29,20 +30,15 @@ export const createTask = async (
   config: TodoistConfig,
   task: TodoistTask
 ): Promise<boolean> => {
+  if (!task.dueDate || !task.projectId) {
+    return false;
+  }
   try {
-    const response = await fetch('https://api.todoist.com/rest/v2/tasks', {
-      method: 'POST',
+    const response = await fetch(`${TODOIST_FUNCTION_URL}?content=${encodeURIComponent(task.content)}&dueDate=${encodeURIComponent(task.dueDate)}&description=${encodeURIComponent(task.description || '')}&projectId=${encodeURIComponent(task.projectId)}&assignee=${encodeURIComponent(task.assignee || '')}`, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${config.apiToken}`,
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        content: task.content,
-        description: task.description || '',
-        project_id: task.projectId,
-        due_datetime: task.dueDate,
-        assignee_id: task.assignee || null
-      }),
+      }
     });
 
     if (!response.ok) {
