@@ -53,14 +53,6 @@ function App() {
 
   // Check if the configurations are valid
   useEffect(() => {
-    // Todoist config check
-    const isTodoistValid = Boolean(todoistConfig.apiToken);
-    setTodoistConfigValid(isTodoistValid);
-    
-    if (!isTodoistValid) {
-      console.warn('Todoist API configuration is incomplete. Sync to Todoist will be disabled.');
-    }
-
     // Google Calendar config check
     const isGoogleCalendarValid = Boolean(
       googleCalendarConfig.clientId && 
