@@ -34,7 +34,7 @@ function App() {
   const [appState, setAppState] = useState<AppState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [configValid, setConfigValid] = useState<boolean>(false);
-  const [todoistConfigValid, setTodoistConfigValid] = useState<boolean>(false);
+  const [todoistConfigValid, setTodoistConfigValid] = useState<boolean>(true);
   const [googleCalendarConfigValid, setGoogleCalendarConfigValid] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
