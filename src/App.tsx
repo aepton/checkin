@@ -292,6 +292,8 @@ function App() {
         endDateTime: endDateTime.toISOString()
       });
     });
+
+    console.log('Tasks and events created:', { todoistTasks: ungroupedTasks.filter(t => t.assignee), calendarEvents });
     
     return { todoistTasks: ungroupedTasks.filter(t => t.assignee), calendarEvents };
   };
