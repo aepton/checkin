@@ -4,6 +4,7 @@ export function formatDate(date: Date): string {
 
 export function getMondayWithOffset(weekOffset: number): Date {
     const today = new Date();
+    today.setHours(12, 0, 0, 0);       // Set time to noon to avoid timezone issues
     const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
     // Either it's:
