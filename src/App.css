@@ -38,6 +38,29 @@ main {
   max-width: 300px;
 }
 
+.sync-toggles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  width: 100%;
+  max-width: 200px;
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+}
+
+.sync-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
 @media (min-width: 768px) {
   .button-container {
     width: 25%;

@@ -41,6 +41,8 @@ function App() {
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [calendarSyncStatus, setCalendarSyncStatus] = useState<string>('');
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
+  const [syncToTodoistEnabled, setSyncToTodoistEnabled] = useState<boolean>(true);
+  const [syncToGoogleCalendarEnabled, setSyncToGoogleCalendarEnabled] = useState<boolean>(true);
   
   // Used for status messages in console and UI updates, but not directly rendered
   const setSaveStatus = (status: string) => {
@@ -132,9 +134,12 @@ function App() {
         setSaveStatus(`Saved "${routeName}" successfully`);
         setHasUnsavedChanges(false);
         
-        // Automatically sync to Todoist without prompting
-        if (todoistConfigValid) {
+        // Automatically sync to Todoist and Google Calendar if enabled
+        if (todoistConfigValid && syncToTodoistEnabled) {
           syncToTodoist();
+        } else if (googleCalendarConfigValid && syncToGoogleCalendarEnabled) {
+          // If Todoist sync is disabled but Google Calendar is enabled, sync directly to Calendar
+          syncToGoogleCalendar();
         }
       } else {
         setSaveStatus('Error saving state');
@@ -320,8 +325,8 @@ function App() {
         setSyncStatus(`Synced ${result.totalSuccess} tasks to Todoist, ${result.totalFailed} failed`);
       }
       
-      // After Todoist sync, also sync to Google Calendar if configured and authorized
-      if (googleCalendarConfigValid) {
+      // After Todoist sync, also sync to Google Calendar if configured, authorized and enabled
+      if (googleCalendarConfigValid && syncToGoogleCalendarEnabled) {
         syncToGoogleCalendar();
       }
     } catch (error) {
@@ -397,13 +402,35 @@ function App() {
             />
             <div className="button-container">
               {isSaveable && (
-                <button 
-                  className="save-button" 
-                  onClick={handleSave}
-                  disabled={!hasUnsavedChanges}
-                >
-                  Save
-                </button>
+                <>
+                  {hasUnsavedChanges && (
+                    <div className="sync-toggles">
+                      <label className="sync-toggle">
+                        <input
+                          type="checkbox"
+                          checked={syncToTodoistEnabled}
+                          onChange={(e) => setSyncToTodoistEnabled(e.target.checked)}
+                        />
+                        Sync to Todoist
+                      </label>
+                      <label className="sync-toggle">
+                        <input
+                          type="checkbox"
+                          checked={syncToGoogleCalendarEnabled}
+                          onChange={(e) => setSyncToGoogleCalendarEnabled(e.target.checked)}
+                        />
+                        Sync to Google Calendar
+                      </label>
+                    </div>
+                  )}
+                  <button 
+                    className="save-button" 
+                    onClick={handleSave}
+                    disabled={!hasUnsavedChanges}
+                  >
+                    Save
+                  </button>
+                </>
               )}
               {syncStatus && <p className="sync-status">{syncStatus}</p>}
               {calendarSyncStatus && <p className="calendar-sync-status">{calendarSyncStatus}</p>}
