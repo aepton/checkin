@@ -163,8 +163,8 @@ function App() {
     const times: { [key: string]: { start: string; end: string } } = {
       'AM 🍓': { start: '08:00', end: '08:30' },
       'AM 🫐': { start: '08:00', end: '08:30' },
-      'PM 🍓': { start: '16:25', end: '17:00' },
-      'PM 🫐': { start: '16:25', end: '17:00' },
+      'PM 🍓': { start: '16:30', end: '17:00' },
+      'PM 🫐': { start: '16:30', end: '17:00' },
       'Dinner': { start: '17:00', end: '18:00' }        
     };
 
