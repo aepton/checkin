@@ -109,7 +109,8 @@ export const loadState = async (
     });    
 
     if (!response.ok) {
-      throw new Error(`Failed to load state: ${response.status}`);
+      console.log(`Failed to load state, date may not exist yet: ${response.status}`);
+      return null;
     }
 
     const data = await response.json();
