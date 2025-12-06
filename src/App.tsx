@@ -25,8 +25,8 @@ function App() {
   // Define the states for the tiles (letters that will cycle through)
   const tileStates = [
     { label: ' ', color: '#f0f0f0' },
-    { label: 'A', color: '#9AD7A4', todoistId: '35630104' },
-    { label: 'L', color: '#FDAEA9', calendar: true },
+    { label: 'A', color: '#9AD7A4', calendar: false, todoistId: '35630104' },
+    { label: 'L', color: '#FDAEA9', calendar: false, todoistId: '35677852' },
     { label: 'B', color: '#F0CA86' }
   ];
   
