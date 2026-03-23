@@ -408,7 +408,7 @@ function App() {
                   index,
                   count: appState.gridState.filter(t => t.stateIndex === index).length,
                   name: userNames[state.label],
-                })).filter(item => item.count > 0);
+                })).filter(item => item.count > 0 && item.name !== 'None');
                 return items.length > 0 ? (
                   <div className="tile-counts">
                     {items.map(({ state, index, count, name }) => (
