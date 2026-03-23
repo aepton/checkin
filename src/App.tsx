@@ -42,7 +42,7 @@ function App() {
   const [calendarSyncStatus, setCalendarSyncStatus] = useState<string>('');
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [syncToTodoistEnabled, setSyncToTodoistEnabled] = useState<boolean>(true);
-  const [syncToGoogleCalendarEnabled, setSyncToGoogleCalendarEnabled] = useState<boolean>(true);
+  const [syncToGoogleCalendarEnabled, setSyncToGoogleCalendarEnabled] = useState<boolean>(false);
   
   // Used for status messages in console and UI updates, but not directly rendered
   const setSaveStatus = (status: string) => {
@@ -211,7 +211,7 @@ function App() {
         content,
         assignee: stateAssignee,
         dueDate: formattedTaskDate,
-        projectId: todoistConfig.projectId || '2316749966',
+        projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
         taskDate,
         stateStartTime,
         stateEndTime,
@@ -391,15 +391,36 @@ function App() {
           <div className="loading">Loading...</div>
         ) : (
           <>
-            <Grid 
-              rows={5} 
-              columns={5} 
-              states={tileStates}
-              initialState={appState}
-              onStateChange={handleStateChange}
-              weekOffset={weekOffset}
-              onWeekChange={setWeekOffset}
-            />
+            <div className="grid-with-counts">
+              <Grid
+                rows={5}
+                columns={5}
+                states={tileStates}
+                initialState={appState}
+                onStateChange={handleStateChange}
+                weekOffset={weekOffset}
+                onWeekChange={setWeekOffset}
+              />
+              {appState && (() => {
+                const userNames: {[key: string]: string} = { 'A': 'Abe', 'L': 'Lizz', 'B': 'Both', ' ': 'None' };
+                const items = tileStates.map((state, index) => ({
+                  state,
+                  index,
+                  count: appState.gridState.filter(t => t.stateIndex === index).length,
+                  name: userNames[state.label],
+                })).filter(item => item.count > 0);
+                return items.length > 0 ? (
+                  <div className="tile-counts">
+                    {items.map(({ state, index, count, name }) => (
+                      <div key={index} className="tile-count-item">
+                        <span className="tile-count-dot" style={{ backgroundColor: state.color }} />
+                        <span>{name}: {count}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+            </div>
             <div className="button-container">
               {isSaveable && (
                 <>
