@@ -60,32 +60,44 @@ main {
   color: #666;
 }
 
-.button-container {
+.action-bar {
   margin-top: 20px;
+  margin-bottom: 40px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.action-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  max-width: 300px;
 }
 
-.sync-toggles {
+.action-status {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 10px;
-  width: 100%;
-  max-width: 200px;
+  align-items: center;
+  gap: 2px;
+}
+
+.status-text {
+  font-size: 13px;
+  margin: 0;
+  color: #666;
+  text-align: center;
 }
 
 .sync-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: #555;
   cursor: pointer;
 }
@@ -94,16 +106,53 @@ main {
   margin: 0;
 }
 
-@media (min-width: 768px) {
-  .button-container {
-    width: 25%;
-    position: fixed;
-    bottom: 0;
-    right: 0;
-  }
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: background-color 0.3s;
+  white-space: nowrap;
+  color: white;
 }
 
-.save-button, .todoist-button, .calendar-button, .wellness-button, .wellness-settings-button {
+.pill-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.pill-button-save {
+  background-color: #4CAF50;
+}
+
+.pill-button-save:hover:not([disabled]) {
+  background-color: #45a049;
+}
+
+.pill-button-wellness {
+  background-color: #7E57C2;
+}
+
+.pill-button-wellness:hover:not([disabled]) {
+  background-color: #6A4AAB;
+}
+
+.pill-button-outline {
+  background-color: #f2f2f2;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.pill-button-outline:hover:not([disabled]) {
+  background-color: #e6e6e6;
+}
+
+/* Save/Cancel buttons inside modals (full-width, not pills) */
+.save-button {
   color: white;
   border: none;
   padding: 8px 16px;
@@ -117,66 +166,23 @@ main {
   transition: background-color 0.3s;
   width: 100%;
   max-width: 200px;
+  background-color: #4CAF50;
 }
 
 @media (min-width: 768px) {
-  .save-button, .todoist-button, .calendar-button, .wellness-button, .wellness-settings-button {
+  .save-button {
     padding: 10px 20px;
     font-size: 16px;
   }
-}
-
-.save-button {
-  background-color: #4CAF50;
 }
 
 .save-button:hover:not([disabled]) {
   background-color: #45a049;
 }
 
-.todoist-button {
-  background-color: #E44332;
-}
-
-.todoist-button:hover:not([disabled]) {
-  background-color: #D13121;
-}
-
-.calendar-button {
-  background-color: #4285F4;
-}
-
-.calendar-button:hover:not([disabled]) {
-  background-color: #3367D6;
-}
-
-.save-button:disabled, .todoist-button:disabled, .calendar-button:disabled, .wellness-button:disabled, .wellness-settings-button:disabled {
+.save-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
-}
-
-.sync-status, .calendar-sync-status {
-  font-size: 14px;
-  margin: 5px 0;
-  color: #666;
-  background-color: rgba(255, 255, 255, 0.8);
-  padding: 5px 10px;
-  border-radius: 4px;
-  z-index: 100;
-}
-
-@media (min-width: 768px) {
-  .sync-status {
-    position: fixed;
-    top: 50px;
-    right: 10px;
-  }
-  
-  .calendar-sync-status {
-    position: fixed;
-    top: 90px;
-    right: 10px;
-  }
 }
 
 /* Modal styles */
@@ -278,37 +284,3 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-.wellness-button {
-  background-color: #7E57C2;
-}
-
-.wellness-button:hover:not([disabled]) {
-  background-color: #6A4AAB;
-}
-
-.wellness-settings-button {
-  background-color: #f2f2f2;
-  color: #333;
-  border: 1px solid #ccc;
-}
-
-.wellness-settings-button:hover:not([disabled]) {
-  background-color: #e6e6e6;
-}
-
-.wellness-status {
-  font-size: 14px;
-  margin: 5px 0;
-  color: #666;
-}
-
-.wellness-container {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 300px;
-}

@@ -6,17 +6,7 @@ import WellnessModal from './components/WellnessModal';
 import { getMondayWithOffset, toISODateString } from './utils/dates';
 import { AppState, loadState, saveState } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
-import {
-  initGoogleCalendarClient,
-  authorizeCalendar,
-  isAuthorized,
-  createEvents,
-  GoogleCalendarEvent
-} from './utils/googleCalendarApi';
-import {
-  todoistConfig,
-  googleCalendarConfig
-} from './config';
+import { todoistConfig } from './config';
 import {
   ACTIVITY_LABELS,
   DEFAULT_WELLNESS_WEIGHTS,
@@ -47,14 +37,11 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [configValid, setConfigValid] = useState<boolean>(false);
   const [todoistConfigValid, setTodoistConfigValid] = useState<boolean>(true);
-  const [googleCalendarConfigValid, setGoogleCalendarConfigValid] = useState<boolean>(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [weekOffset, setWeekOffset] = useState<number>(0);
-  const [calendarSyncStatus, setCalendarSyncStatus] = useState<string>('');
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [syncToTodoistEnabled, setSyncToTodoistEnabled] = useState<boolean>(true);
-  const [syncToGoogleCalendarEnabled, setSyncToGoogleCalendarEnabled] = useState<boolean>(false);
 
   // Wellness (meditation/workout) task randomizer state
   const [wellnessDefaultWeights, setWellnessDefaultWeights] = useState<WellnessWeights>(DEFAULT_WELLNESS_WEIGHTS);
@@ -67,34 +54,9 @@ function App() {
   const setSaveStatus = (status: string) => {
     console.log('Save status:', status);
   };
-  const [, setGoogleCalendarAuthorized] = useState<boolean>(false);
-  
+
   // Ref to store the latest state without triggering re-renders
   const appStateRef = useRef<AppState | null>(null);
-
-  // Check if the configurations are valid
-  useEffect(() => {
-    // Google Calendar config check
-    const isGoogleCalendarValid = Boolean(
-      googleCalendarConfig.clientId && 
-      googleCalendarConfig.apiKey
-    );
-    setGoogleCalendarConfigValid(isGoogleCalendarValid);
-    
-    if (!isGoogleCalendarValid) {
-      console.warn('Google Calendar configuration is incomplete. Sync to Google Calendar will be disabled.');
-    } else {
-      // Initialize Google Calendar client
-      initGoogleCalendarClient(googleCalendarConfig)
-        .then(initialized => {
-          if (!initialized) {
-            console.warn('Failed to initialize Google Calendar client');
-          } else {
-            setGoogleCalendarAuthorized(true);
-          }
-        });
-    }
-  }, []);
 
   // Load initial state from Digital Ocean Spaces and list available routes
   useEffect(() => {
@@ -249,12 +211,9 @@ function App() {
         setSaveStatus(`Saved "${routeName}" successfully`);
         setHasUnsavedChanges(false);
         
-        // Automatically sync to Todoist and Google Calendar if enabled
+        // Automatically sync to Todoist if enabled
         if (todoistConfigValid && syncToTodoistEnabled) {
           syncToTodoist();
-        } else if (googleCalendarConfigValid && syncToGoogleCalendarEnabled) {
-          // If Todoist sync is disabled but Google Calendar is enabled, sync directly to Calendar
-          syncToGoogleCalendar();
         }
       } else {
         setSaveStatus('Error saving state');
@@ -288,12 +247,11 @@ function App() {
     // Row headings for task descriptions
     const rowHeadings = ['AM 🍓', 'AM 🫐', 'PM 🍓', 'PM 🫐', 'Dinner'];
     
-    // Data structures to hold tasks and events
+    // Data structures to hold tasks
     const todoistTasks: TodoistTask[] = [];
-    const calendarEvents: GoogleCalendarEvent[] = [];
-    
+
     // Process each tile in the grid state (using ref)
-    if (!appStateRef.current) return { todoistTasks, calendarEvents };
+    if (!appStateRef.current) return { todoistTasks };
     
     appStateRef.current.gridState.forEach(tile => {
       // Skip empty tiles (state index 0)
@@ -389,33 +347,9 @@ function App() {
       }
     });
 
-    ungroupedTasks.forEach(task => {
-      if (!task.calendar) return;
+    console.log('Tasks created:', { todoistTasks: ungroupedTasks.filter(t => t.assignee) });
 
-      // Format for Google Calendar
-      const startDateTime = new Date(task.taskDate);
-      startDateTime.setHours(
-        parseInt(task.stateStartTime.split(':')[0], 10), 
-        parseInt(task.stateStartTime.split(':')[1], 10)
-      );
-      
-      const endDateTime = new Date(task.taskDate);
-      endDateTime.setHours(
-        parseInt(task.stateEndTime.split(':')[0], 10), 
-        parseInt(task.stateEndTime.split(':')[1], 10)
-      );
-
-      // Create a Google Calendar event
-      calendarEvents.push({
-        summary: task.content,
-        startDateTime: startDateTime.toISOString(),
-        endDateTime: endDateTime.toISOString()
-      });
-    });
-
-    console.log('Tasks and events created:', { todoistTasks: ungroupedTasks.filter(t => t.assignee), calendarEvents });
-    
-    return { todoistTasks: ungroupedTasks.filter(t => t.assignee), calendarEvents };
+    return { todoistTasks: ungroupedTasks.filter(t => t.assignee) };
   };
 
   // Sync tasks to Todoist
@@ -439,64 +373,12 @@ function App() {
       } else {
         setSyncStatus(`Synced ${result.totalSuccess} tasks to Todoist, ${result.totalFailed} failed`);
       }
-      
-      // After Todoist sync, also sync to Google Calendar if configured, authorized and enabled
-      if (googleCalendarConfigValid && syncToGoogleCalendarEnabled) {
-        syncToGoogleCalendar();
-      }
     } catch (error) {
       console.error('Error syncing to Todoist:', error);
       setSyncStatus('Error syncing to Todoist');
       setShowSyncModal(false);
     }
   };
-  
-  // Sync events to Google Calendar
-  const syncToGoogleCalendar = async () => {
-    if (!googleCalendarConfigValid || !appStateRef.current || !isSaveable) return;
-    
-    // Check if authorized, if not request authorization
-    if (!isAuthorized()) {
-      try {
-        setCalendarSyncStatus('Requesting Google Calendar authorization...');
-        const authorized = await authorizeCalendar();
-        setGoogleCalendarAuthorized(authorized);
-        
-        if (!authorized) {
-          setCalendarSyncStatus('Google Calendar authorization failed');
-          return;
-        }
-      } catch (error) {
-        console.error('Error authorizing Google Calendar:', error);
-        setCalendarSyncStatus('Google Calendar authorization failed');
-        return;
-      }
-    }
-    
-    setCalendarSyncStatus('Syncing to Google Calendar...');
-    try {
-      const { calendarEvents } = createTasksData();
-      
-      if (calendarEvents.length === 0) {
-        setCalendarSyncStatus('No events to sync (all tiles are empty)');
-        return;
-      }
-      
-      // Send events to Google Calendar
-      const result = await createEvents(googleCalendarConfig, calendarEvents);
-      
-      if (result.success) {
-        setCalendarSyncStatus(`Synced ${result.totalSuccess} events successfully to Google Calendar`);
-      } else {
-        setCalendarSyncStatus(`Synced ${result.totalSuccess} events, ${result.totalFailed} failed to Google Calendar`);
-      }
-    } catch (error) {
-      console.error('Error syncing to Google Calendar:', error);
-      setCalendarSyncStatus('Error syncing to Google Calendar');
-    }
-  };
-  
-  // Modal functionality removed
 
   return (
     <div className="App">      
@@ -536,63 +418,58 @@ function App() {
                 ) : null;
               })()}
             </div>
-            <div className="button-container">
+            <div className="action-bar">
               {isSaveable && (
-                <>
+                <div className="action-group">
                   {hasUnsavedChanges && (
-                    <div className="sync-toggles">
-                      <label className="sync-toggle">
-                        <input
-                          type="checkbox"
-                          checked={syncToTodoistEnabled}
-                          onChange={(e) => setSyncToTodoistEnabled(e.target.checked)}
-                        />
-                        Sync to Todoist
-                      </label>
-                      <label className="sync-toggle">
-                        <input
-                          type="checkbox"
-                          checked={syncToGoogleCalendarEnabled}
-                          onChange={(e) => setSyncToGoogleCalendarEnabled(e.target.checked)}
-                        />
-                        Sync to Google Calendar
-                      </label>
-                    </div>
+                    <label className="sync-toggle">
+                      <input
+                        type="checkbox"
+                        checked={syncToTodoistEnabled}
+                        onChange={(e) => setSyncToTodoistEnabled(e.target.checked)}
+                      />
+                      Sync to Todoist
+                    </label>
                   )}
-                  <button 
-                    className="save-button" 
+                  <button
+                    className="pill-button pill-button-save"
                     onClick={handleSave}
                     disabled={!hasUnsavedChanges}
                   >
-                    Save
+                    <span aria-hidden="true">💾</span> Save
                   </button>
-                </>
+                </div>
               )}
-              {syncStatus && <p className="sync-status">{syncStatus}</p>}
-              {calendarSyncStatus && <p className="calendar-sync-status">{calendarSyncStatus}</p>}
-            </div>
 
-            {/* Sync Modal removed - automatically syncing now */}
+              <div className="action-group">
+                <button
+                  className="pill-button pill-button-outline"
+                  onClick={() => setShowWellnessModal(true)}
+                  aria-label="Wellness Weights"
+                  title="Wellness Weights"
+                >
+                  <span aria-hidden="true">⚙️</span> Weights
+                </button>
+                <button
+                  className="pill-button pill-button-wellness"
+                  onClick={handleSaveTodayWellness}
+                  disabled={
+                    !wellnessPlan ||
+                    (wellnessPlan.assignments[toISODateString(new Date())] || []).length === 0
+                  }
+                  aria-label="Save Today's Wellness Tasks"
+                  title="Save Today's Wellness Tasks"
+                >
+                  <span aria-hidden="true">✅</span> Save Today
+                </button>
+              </div>
 
-            <div className="wellness-container">
-              <button
-                className="wellness-settings-button"
-                onClick={() => setShowWellnessModal(true)}
-              >
-                Wellness Weights
-              </button>
-              <button
-                className="wellness-button"
-                onClick={handleSaveTodayWellness}
-                disabled={
-                  !wellnessPlan ||
-                  (wellnessPlan.assignments[toISODateString(new Date())] || []).length === 0 ||
-                  wellnessPlan.savedDays[toISODateString(new Date())] === true
-                }
-              >
-                Save Today's Wellness Tasks
-              </button>
-              {wellnessStatus && <p className="wellness-status">{wellnessStatus}</p>}
+              {(syncStatus || wellnessStatus) && (
+                <div className="action-status">
+                  {syncStatus && <p className="status-text">{syncStatus}</p>}
+                  {wellnessStatus && <p className="status-text">{wellnessStatus}</p>}
+                </div>
+              )}
             </div>
 
             <WellnessModal
