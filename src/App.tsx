@@ -194,6 +194,7 @@ function App() {
       const tasks: TodoistTask[] = todaysActivities.map(activity => ({
         label: ACTIVITY_LABELS[activity],
         content: ACTIVITY_LABELS[activity],
+        assignee: tileStates.find(state => state.label === 'A')?.todoistId,
         dueDate: todayKey,
         projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
         calendar: false,

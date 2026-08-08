@@ -9,6 +9,8 @@ type WellnessModalProps = {
   onSave: (defaultWeights: WellnessWeights, weekWeights: WellnessWeights) => void;
 };
 
+const MAX_WEIGHT = 10;
+
 const WeightInputs: React.FC<{
   weights: WellnessWeights;
   onChange: (activity: ActivityType, value: number) => void;
@@ -16,13 +18,16 @@ const WeightInputs: React.FC<{
   <div className="wellness-weight-grid">
     {ACTIVITY_TYPES.map(activity => (
       <label key={activity} className="wellness-weight-row">
-        <span>{ACTIVITY_LABELS[activity]}</span>
+        <span className="wellness-weight-label">{ACTIVITY_LABELS[activity]}</span>
         <input
-          type="number"
+          type="range"
           min={0}
+          max={MAX_WEIGHT}
+          step={1}
           value={weights[activity]}
-          onChange={(e) => onChange(activity, Math.max(0, parseInt(e.target.value, 10) || 0))}
+          onChange={(e) => onChange(activity, parseInt(e.target.value, 10))}
         />
+        <span className="wellness-weight-value">{weights[activity]}</span>
       </label>
     ))}
   </div>
@@ -60,7 +65,10 @@ const WellnessModal: React.FC<WellnessModalProps> = ({
           }
         />
 
-        <p className="wellness-modal-hint">This week's weights (re-rolls this week's plan on save)</p>
+        <p className="wellness-modal-hint">
+          This week's weights &mdash; used for today's task if you hit "Save Today's Wellness Tasks",
+          and for the rest of this week's automatic planning. Saving here re-rolls this week's plan.
+        </p>
         <WeightInputs
           weights={localWeekWeights}
           onChange={(activity, value) =>
