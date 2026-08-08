@@ -2,6 +2,24 @@ export function formatDate(date: Date): string {
     return date.toLocaleDateString('en-US').replace(/\//g, '-');
 };
 
+export function toISODateString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// Returns the 7 dates (Monday-Sunday) for the week starting on the given Monday
+export function getWeekDatesFromMonday(monday: Date): Date[] {
+    const dates: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        dates.push(date);
+    }
+    return dates;
+};
+
 export function getMondayWithOffset(weekOffset: number): Date {
     const today = new Date();
     today.setHours(12, 0, 0, 0);       // Set time to noon to avoid timezone issues

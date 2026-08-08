@@ -138,6 +138,68 @@ export const loadState = async (
 };
 
 /**
+ * Save arbitrary JSON data under a namespace/key pair (same backing store as saveState,
+ * but for data that isn't keyed by a week date, e.g. settings)
+ */
+export const saveNamespacedData = async (
+  namespace: string,
+  key: string,
+  data: unknown
+): Promise<boolean> => {
+  try {
+    const response = await fetch(`${SAVER_FUNCTION_URL}?namespace=${encodeURIComponent(namespace.toLowerCase())}&date=${encodeURIComponent(key)}&data=${encodeURIComponent(JSON.stringify(data))}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save data: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.success === true;
+  } catch (error) {
+    console.error('Error saving namespaced data to DO Spaces:', error);
+    return false;
+  }
+};
+
+/**
+ * Load arbitrary JSON data previously stored with saveNamespacedData
+ */
+export const loadNamespacedData = async <T>(
+  namespace: string,
+  key: string
+): Promise<T | null> => {
+  try {
+    const response = await fetch(`${READER_FUNCTION_URL}?namespace=${encodeURIComponent(namespace.toLowerCase())}&date=${encodeURIComponent(key)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.Body) {
+      return typeof data.Body === 'object' ? data.Body : JSON.parse(data.Body.toString());
+    } else if (data && typeof data === 'object') {
+      return data as T;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading namespaced data from DO Spaces:', error);
+    return null;
+  }
+};
+
+/**
  * Delete a saved state from Digital Ocean Spaces
  */
 export const deleteState = async (

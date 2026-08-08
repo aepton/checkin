@@ -103,7 +103,7 @@ main {
   }
 }
 
-.save-button, .todoist-button, .calendar-button {
+.save-button, .todoist-button, .calendar-button, .wellness-button, .wellness-settings-button {
   color: white;
   border: none;
   padding: 8px 16px;
@@ -120,7 +120,7 @@ main {
 }
 
 @media (min-width: 768px) {
-  .save-button, .todoist-button, .calendar-button {
+  .save-button, .todoist-button, .calendar-button, .wellness-button, .wellness-settings-button {
     padding: 10px 20px;
     font-size: 16px;
   }
@@ -150,7 +150,7 @@ main {
   background-color: #3367D6;
 }
 
-.save-button:disabled, .todoist-button:disabled, .calendar-button:disabled {
+.save-button:disabled, .todoist-button:disabled, .calendar-button:disabled, .wellness-button:disabled, .wellness-settings-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
 }
@@ -240,4 +240,70 @@ main {
 
 .cancel-button:hover {
   background-color: #e6e6e6;
+}
+
+.wellness-modal-hint {
+  font-size: 13px;
+  color: #666;
+  margin: 16px 0 8px;
+  text-align: left;
+}
+
+.wellness-weight-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wellness-weight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: #333;
+  text-align: left;
+}
+
+.wellness-weight-row input[type="number"] {
+  width: 60px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.wellness-button {
+  background-color: #7E57C2;
+}
+
+.wellness-button:hover:not([disabled]) {
+  background-color: #6A4AAB;
+}
+
+.wellness-settings-button {
+  background-color: #f2f2f2;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.wellness-settings-button:hover:not([disabled]) {
+  background-color: #e6e6e6;
+}
+
+.wellness-status {
+  font-size: 14px;
+  margin: 5px 0;
+  color: #666;
+}
+
+.wellness-container {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 300px;
 }

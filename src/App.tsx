@@ -2,20 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import './App.css';
 import Grid from './components/Grid';
-import { getMondayWithOffset } from './utils/dates';
+import WellnessModal from './components/WellnessModal';
+import { getMondayWithOffset, toISODateString } from './utils/dates';
 import { AppState, loadState, saveState } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
-import { 
-  initGoogleCalendarClient, 
-  authorizeCalendar, 
-  isAuthorized, 
-  createEvents, 
-  GoogleCalendarEvent 
+import {
+  initGoogleCalendarClient,
+  authorizeCalendar,
+  isAuthorized,
+  createEvents,
+  GoogleCalendarEvent
 } from './utils/googleCalendarApi';
-import { 
-  todoistConfig, 
-  googleCalendarConfig 
+import {
+  todoistConfig,
+  googleCalendarConfig
 } from './config';
+import {
+  ACTIVITY_LABELS,
+  DEFAULT_WELLNESS_WEIGHTS,
+  WeeklyWellnessPlan,
+  WellnessWeights,
+  generateWeeklyPlan,
+  loadWeeklyPlan,
+  loadWellnessSettings,
+  saveWeeklyPlan,
+  saveWellnessSettings,
+} from './utils/wellness';
 
 function App() {
   // Get the route parameter from the URL
@@ -43,7 +55,14 @@ function App() {
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [syncToTodoistEnabled, setSyncToTodoistEnabled] = useState<boolean>(true);
   const [syncToGoogleCalendarEnabled, setSyncToGoogleCalendarEnabled] = useState<boolean>(false);
-  
+
+  // Wellness (meditation/workout) task randomizer state
+  const [wellnessDefaultWeights, setWellnessDefaultWeights] = useState<WellnessWeights>(DEFAULT_WELLNESS_WEIGHTS);
+  const [wellnessPlan, setWellnessPlan] = useState<WeeklyWellnessPlan | null>(null);
+  const [showWellnessModal, setShowWellnessModal] = useState<boolean>(false);
+  const [wellnessStatus, setWellnessStatus] = useState<string>('');
+  const wellnessPlanRef = useRef<WeeklyWellnessPlan | null>(null);
+
   // Used for status messages in console and UI updates, but not directly rendered
   const setSaveStatus = (status: string) => {
     console.log('Save status:', status);
@@ -108,6 +127,101 @@ function App() {
 
     fetchState();
   }, [configValid, routeName, weekOffset]);
+
+  // Load wellness settings and this week's plan (generating one if it doesn't exist yet)
+  useEffect(() => {
+    if (!routeName) return;
+
+    const fetchWellness = async () => {
+      try {
+        const settings = await loadWellnessSettings(routeName);
+        setWellnessDefaultWeights(settings.weights);
+
+        const monday = getMondayWithOffset(0);
+        const weekStart = toISODateString(monday);
+        let plan = await loadWeeklyPlan(routeName, weekStart);
+
+        if (!plan) {
+          plan = generateWeeklyPlan(settings.weights, monday);
+          await saveWeeklyPlan(routeName, plan);
+        }
+
+        setWellnessPlan(plan);
+        wellnessPlanRef.current = plan;
+      } catch (error) {
+        console.error('Error loading wellness data:', error);
+      }
+    };
+
+    fetchWellness();
+  }, [routeName]);
+
+  // Save updated default/week wellness weights from the modal
+  const handleSaveWellnessWeights = async (newDefaultWeights: WellnessWeights, newWeekWeights: WellnessWeights) => {
+    if (!routeName) return;
+    setShowWellnessModal(false);
+
+    try {
+      await saveWellnessSettings(routeName, { weights: newDefaultWeights });
+      setWellnessDefaultWeights(newDefaultWeights);
+
+      const monday = getMondayWithOffset(0);
+      const newPlan = generateWeeklyPlan(newWeekWeights, monday);
+      await saveWeeklyPlan(routeName, newPlan);
+      setWellnessPlan(newPlan);
+      wellnessPlanRef.current = newPlan;
+      setWellnessStatus('Wellness weights saved');
+    } catch (error) {
+      console.error('Error saving wellness weights:', error);
+      setWellnessStatus('Error saving wellness weights');
+    }
+  };
+
+  // Create Todoist tasks for today's weighted-random wellness activities
+  const handleSaveTodayWellness = async () => {
+    if (!routeName || !wellnessPlanRef.current) return;
+
+    const todayKey = toISODateString(new Date());
+    const todaysActivities = wellnessPlanRef.current.assignments[todayKey] || [];
+
+    if (todaysActivities.length === 0) {
+      setWellnessStatus('No wellness tasks scheduled for today');
+      return;
+    }
+
+    setWellnessStatus('Saving today\'s wellness tasks...');
+    try {
+      const tasks: TodoistTask[] = todaysActivities.map(activity => ({
+        label: ACTIVITY_LABELS[activity],
+        content: ACTIVITY_LABELS[activity],
+        dueDate: todayKey,
+        projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
+        calendar: false,
+        taskDate: new Date(),
+        stateStartTime: '',
+        stateEndTime: '',
+      }));
+
+      const result = await createTasks(todoistConfig, tasks);
+
+      const updatedPlan: WeeklyWellnessPlan = {
+        ...wellnessPlanRef.current,
+        savedDays: { ...wellnessPlanRef.current.savedDays, [todayKey]: true },
+      };
+      await saveWeeklyPlan(routeName, updatedPlan);
+      setWellnessPlan(updatedPlan);
+      wellnessPlanRef.current = updatedPlan;
+
+      if (result.success) {
+        setWellnessStatus(`Saved ${result.totalSuccess} wellness task(s) to Todoist`);
+      } else {
+        setWellnessStatus(`Saved ${result.totalSuccess} task(s), ${result.totalFailed} failed`);
+      }
+    } catch (error) {
+      console.error('Error saving wellness tasks:', error);
+      setWellnessStatus('Error saving wellness tasks');
+    }
+  };
 
   // Handle state changes from Grid component
   const handleStateChange = (newState: AppState) => {
@@ -456,8 +570,37 @@ function App() {
               {syncStatus && <p className="sync-status">{syncStatus}</p>}
               {calendarSyncStatus && <p className="calendar-sync-status">{calendarSyncStatus}</p>}
             </div>
-            
+
             {/* Sync Modal removed - automatically syncing now */}
+
+            <div className="wellness-container">
+              <button
+                className="wellness-settings-button"
+                onClick={() => setShowWellnessModal(true)}
+              >
+                Wellness Weights
+              </button>
+              <button
+                className="wellness-button"
+                onClick={handleSaveTodayWellness}
+                disabled={
+                  !wellnessPlan ||
+                  (wellnessPlan.assignments[toISODateString(new Date())] || []).length === 0 ||
+                  wellnessPlan.savedDays[toISODateString(new Date())] === true
+                }
+              >
+                Save Today's Wellness Tasks
+              </button>
+              {wellnessStatus && <p className="wellness-status">{wellnessStatus}</p>}
+            </div>
+
+            <WellnessModal
+              isOpen={showWellnessModal}
+              defaultWeights={wellnessDefaultWeights}
+              weekWeights={wellnessPlan?.weights || wellnessDefaultWeights}
+              onCancel={() => setShowWellnessModal(false)}
+              onSave={handleSaveWellnessWeights}
+            />
           </>
         )}
       </main>
