@@ -32,6 +32,7 @@ function App() {
     { label: 'L', color: '#FDAEA9', calendar: false, todoistId: '35677852' },
     { label: 'B', color: '#F0CA86' }
   ];
+  const abrahamTodoistId = tileStates.find(state => state.label === 'A')?.todoistId;
   
   // State for the app
   const [appState, setAppState] = useState<AppState | null>(null);
@@ -148,10 +149,57 @@ function App() {
     }
   };
 
-  // Create Todoist tasks for today's weighted-random wellness activities
-  const handleSaveTodayWellness = async () => {
-    if (!routeName || !wellnessPlanRef.current) return;
+  // Create Todoist tasks for the wellness activities assigned to the given dates,
+  // and mark those dates as saved in the persisted weekly plan
+  const saveWellnessTasksForDays = async (
+    dateKeys: string[]
+  ): Promise<{ success: boolean; totalSuccess: number; totalFailed: number } | null> => {
+    if (!routeName || !wellnessPlanRef.current) return null;
 
+    const plan = wellnessPlanRef.current;
+    const tasks: TodoistTask[] = [];
+    const daysWithActivities: string[] = [];
+
+    dateKeys.forEach(dateKey => {
+      const activities = plan.assignments[dateKey] || [];
+      if (activities.length === 0) return;
+      daysWithActivities.push(dateKey);
+      activities.forEach(activity => {
+        tasks.push({
+          label: ACTIVITY_LABELS[activity],
+          content: ACTIVITY_LABELS[activity],
+          assignee: abrahamTodoistId,
+          dueDate: dateKey,
+          projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
+          calendar: false,
+          taskDate: new Date(dateKey),
+          stateStartTime: '',
+          stateEndTime: '',
+        });
+      });
+    });
+
+    if (tasks.length === 0) {
+      return { success: true, totalSuccess: 0, totalFailed: 0 };
+    }
+
+    const result = await createTasks(todoistConfig, tasks);
+
+    const updatedSavedDays = { ...plan.savedDays };
+    daysWithActivities.forEach(dateKey => {
+      updatedSavedDays[dateKey] = true;
+    });
+    const updatedPlan: WeeklyWellnessPlan = { ...plan, savedDays: updatedSavedDays };
+    await saveWeeklyPlan(routeName, updatedPlan);
+    setWellnessPlan(updatedPlan);
+    wellnessPlanRef.current = updatedPlan;
+
+    return result;
+  };
+
+  // Push just today's weighted-random wellness activities to Todoist
+  const handleSaveTodayWellness = async () => {
+    if (!wellnessPlanRef.current) return;
     const todayKey = toISODateString(new Date());
     const todaysActivities = wellnessPlanRef.current.assignments[todayKey] || [];
 
@@ -162,27 +210,8 @@ function App() {
 
     setWellnessStatus('Saving today\'s wellness tasks...');
     try {
-      const tasks: TodoistTask[] = todaysActivities.map(activity => ({
-        label: ACTIVITY_LABELS[activity],
-        content: ACTIVITY_LABELS[activity],
-        assignee: tileStates.find(state => state.label === 'A')?.todoistId,
-        dueDate: todayKey,
-        projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
-        calendar: false,
-        taskDate: new Date(),
-        stateStartTime: '',
-        stateEndTime: '',
-      }));
-
-      const result = await createTasks(todoistConfig, tasks);
-
-      const updatedPlan: WeeklyWellnessPlan = {
-        ...wellnessPlanRef.current,
-        savedDays: { ...wellnessPlanRef.current.savedDays, [todayKey]: true },
-      };
-      await saveWeeklyPlan(routeName, updatedPlan);
-      setWellnessPlan(updatedPlan);
-      wellnessPlanRef.current = updatedPlan;
+      const result = await saveWellnessTasksForDays([todayKey]);
+      if (!result) return;
 
       if (result.success) {
         setWellnessStatus(`Saved ${result.totalSuccess} wellness task(s) to Todoist`);
@@ -192,6 +221,28 @@ function App() {
     } catch (error) {
       console.error('Error saving wellness tasks:', error);
       setWellnessStatus('Error saving wellness tasks');
+    }
+  };
+
+  // Push the whole week's wellness plan to Todoist (called from the main Save button)
+  const handleSaveWeekWellness = async () => {
+    if (!wellnessPlanRef.current) return;
+
+    try {
+      const dateKeys = Object.keys(wellnessPlanRef.current.assignments);
+      const result = await saveWellnessTasksForDays(dateKeys);
+      if (!result) return;
+
+      if (result.totalSuccess === 0 && result.totalFailed === 0) {
+        setWellnessStatus('No wellness tasks to sync this week');
+      } else if (result.success) {
+        setWellnessStatus(`Synced ${result.totalSuccess} wellness task(s) for the week to Todoist`);
+      } else {
+        setWellnessStatus(`Synced ${result.totalSuccess} wellness task(s), ${result.totalFailed} failed`);
+      }
+    } catch (error) {
+      console.error('Error saving week\'s wellness tasks:', error);
+      setWellnessStatus('Error saving week\'s wellness tasks');
     }
   };
 
@@ -220,9 +271,10 @@ function App() {
         setSaveStatus(`Saved "${routeName}" successfully`);
         setHasUnsavedChanges(false);
         
-        // Automatically sync to Todoist if enabled
+        // Automatically sync to Todoist if enabled (family tasks + the week's wellness tasks)
         if (todoistConfigValid && syncToTodoistEnabled) {
           syncToTodoist();
+          handleSaveWeekWellness();
         }
       } else {
         setSaveStatus('Error saving state');
@@ -442,8 +494,10 @@ function App() {
                   )}
                   <button
                     className="pill-button pill-button-save"
-                    onClick={handleSave}
-                    disabled={!hasUnsavedChanges}
+                    // TEMPORARY: wired to only push wellness tasks so we can catch up without
+                    // re-creating duplicate family tasks. Revert to onClick={handleSave} once done.
+                    onClick={handleSaveWeekWellness}
+                    disabled={!wellnessPlan}
                   >
                     <span aria-hidden="true">💾</span> Save
                   </button>
