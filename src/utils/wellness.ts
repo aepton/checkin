@@ -21,15 +21,24 @@ export const DEFAULT_WELLNESS_WEIGHTS: WellnessWeights = {
   handWorkout: 3,
 };
 
-const WEEK_TASK_CAP = 10;
+// Every day gets at least 1 task, so the cap can never go below 7 (1/day * 7 days);
+// it can never exceed 14 (2/day * 7 days) since no day gets more than 2 tasks.
+export const MIN_WEEK_TASK_CAP = 7;
+export const MAX_WEEK_TASK_CAP = 14;
+export const DEFAULT_WEEK_TASK_CAP = 10;
+
+const clampCap = (cap: number): number =>
+  Math.min(MAX_WEEK_TASK_CAP, Math.max(MIN_WEEK_TASK_CAP, Math.round(cap)));
 
 export interface WellnessSettings {
   weights: WellnessWeights;
+  cap: number;
 }
 
 export interface WeeklyWellnessPlan {
   weekStart: string; // ISO date of the Monday this plan covers
   weights: WellnessWeights; // weights used to generate this plan
+  cap: number; // weekly task cap used to generate this plan
   assignments: Record<string, ActivityType[]>; // ISO date -> activities for that day
   savedDays: Record<string, boolean>; // ISO date -> whether tasks were pushed to Todoist
 }
@@ -40,7 +49,9 @@ const SETTINGS_KEY = 'default';
 
 export const loadWellnessSettings = async (routeName: string): Promise<WellnessSettings> => {
   const loaded = await loadNamespacedData<WellnessSettings>(settingsNamespace(routeName), SETTINGS_KEY);
-  return loaded?.weights ? loaded : { weights: { ...DEFAULT_WELLNESS_WEIGHTS } };
+  return loaded?.weights
+    ? { weights: loaded.weights, cap: clampCap(loaded.cap ?? DEFAULT_WEEK_TASK_CAP) }
+    : { weights: { ...DEFAULT_WELLNESS_WEIGHTS }, cap: DEFAULT_WEEK_TASK_CAP };
 };
 
 export const saveWellnessSettings = async (routeName: string, settings: WellnessSettings): Promise<boolean> => {
@@ -72,19 +83,20 @@ const pickWeightedActivity = (weights: WellnessWeights): ActivityType => {
   return entries[entries.length - 1][0];
 };
 
-// Decides how many tasks (1 or 2) each of the 7 days gets, capped at WEEK_TASK_CAP total
-const pickDailyCounts = (): number[] => {
+// Decides how many tasks (1 or 2) each of the 7 days gets, capped at the given weekly total
+const pickDailyCounts = (cap: number): number[] => {
+  const clampedCap = clampCap(cap);
   const counts = Array(7).fill(1);
   let total = 7;
 
-  const order = ACTIVITY_TYPES.length ? [0, 1, 2, 3, 4, 5, 6] : [];
+  const order = [0, 1, 2, 3, 4, 5, 6];
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [order[i], order[j]] = [order[j], order[i]];
   }
 
   for (const dayIndex of order) {
-    if (total >= WEEK_TASK_CAP) break;
+    if (total >= clampedCap) break;
     if (Math.random() < 0.5) {
       counts[dayIndex] = 2;
       total += 1;
@@ -94,9 +106,10 @@ const pickDailyCounts = (): number[] => {
   return counts;
 };
 
-export const generateWeeklyPlan = (weights: WellnessWeights, monday: Date): WeeklyWellnessPlan => {
+export const generateWeeklyPlan = (weights: WellnessWeights, cap: number, monday: Date): WeeklyWellnessPlan => {
+  const clampedCap = clampCap(cap);
   const days = getWeekDatesFromMonday(monday);
-  const counts = pickDailyCounts();
+  const counts = pickDailyCounts(clampedCap);
   const assignments: Record<string, ActivityType[]> = {};
 
   days.forEach((date, i) => {
@@ -111,6 +124,7 @@ export const generateWeeklyPlan = (weights: WellnessWeights, monday: Date): Week
   return {
     weekStart: toISODateString(monday),
     weights,
+    cap: clampedCap,
     assignments,
     savedDays: {},
   };

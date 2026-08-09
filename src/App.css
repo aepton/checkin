@@ -284,3 +284,9 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.wellness-cap-grid {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e6e6e6;
+}
+

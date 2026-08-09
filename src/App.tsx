@@ -9,6 +9,7 @@ import { createTasks, TodoistTask } from './utils/todoistApi';
 import { todoistConfig } from './config';
 import {
   ACTIVITY_LABELS,
+  DEFAULT_WEEK_TASK_CAP,
   DEFAULT_WELLNESS_WEIGHTS,
   WeeklyWellnessPlan,
   WellnessWeights,
@@ -45,6 +46,7 @@ function App() {
 
   // Wellness (meditation/workout) task randomizer state
   const [wellnessDefaultWeights, setWellnessDefaultWeights] = useState<WellnessWeights>(DEFAULT_WELLNESS_WEIGHTS);
+  const [wellnessDefaultCap, setWellnessDefaultCap] = useState<number>(DEFAULT_WEEK_TASK_CAP);
   const [wellnessPlan, setWellnessPlan] = useState<WeeklyWellnessPlan | null>(null);
   const [showWellnessModal, setShowWellnessModal] = useState<boolean>(false);
   const [wellnessStatus, setWellnessStatus] = useState<string>('');
@@ -98,13 +100,14 @@ function App() {
       try {
         const settings = await loadWellnessSettings(routeName);
         setWellnessDefaultWeights(settings.weights);
+        setWellnessDefaultCap(settings.cap);
 
         const monday = getMondayWithOffset(0);
         const weekStart = toISODateString(monday);
         let plan = await loadWeeklyPlan(routeName, weekStart);
 
         if (!plan) {
-          plan = generateWeeklyPlan(settings.weights, monday);
+          plan = generateWeeklyPlan(settings.weights, settings.cap, monday);
           await saveWeeklyPlan(routeName, plan);
         }
 
@@ -118,17 +121,23 @@ function App() {
     fetchWellness();
   }, [routeName]);
 
-  // Save updated default/week wellness weights from the modal
-  const handleSaveWellnessWeights = async (newDefaultWeights: WellnessWeights, newWeekWeights: WellnessWeights) => {
+  // Save updated default/week wellness weights and caps from the modal
+  const handleSaveWellnessWeights = async (
+    newDefaultWeights: WellnessWeights,
+    newDefaultCap: number,
+    newWeekWeights: WellnessWeights,
+    newWeekCap: number
+  ) => {
     if (!routeName) return;
     setShowWellnessModal(false);
 
     try {
-      await saveWellnessSettings(routeName, { weights: newDefaultWeights });
+      await saveWellnessSettings(routeName, { weights: newDefaultWeights, cap: newDefaultCap });
       setWellnessDefaultWeights(newDefaultWeights);
+      setWellnessDefaultCap(newDefaultCap);
 
       const monday = getMondayWithOffset(0);
-      const newPlan = generateWeeklyPlan(newWeekWeights, monday);
+      const newPlan = generateWeeklyPlan(newWeekWeights, newWeekCap, monday);
       await saveWeeklyPlan(routeName, newPlan);
       setWellnessPlan(newPlan);
       wellnessPlanRef.current = newPlan;
@@ -475,7 +484,9 @@ function App() {
             <WellnessModal
               isOpen={showWellnessModal}
               defaultWeights={wellnessDefaultWeights}
+              defaultCap={wellnessDefaultCap}
               weekWeights={wellnessPlan?.weights || wellnessDefaultWeights}
+              weekCap={wellnessPlan?.cap ?? wellnessDefaultCap}
               onCancel={() => setShowWellnessModal(false)}
               onSave={handleSaveWellnessWeights}
             />
