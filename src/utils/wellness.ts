@@ -66,13 +66,13 @@ export const saveWeeklyPlan = async (routeName: string, plan: WeeklyWellnessPlan
   return saveNamespacedData(planNamespace(routeName), plan.weekStart, plan);
 };
 
-// Picks one activity, weighted by the given weights
-const pickWeightedActivity = (weights: WellnessWeights): ActivityType => {
-  const entries = ACTIVITY_TYPES.map(type => [type, Math.max(weights[type] ?? 0, 0)] as [ActivityType, number]);
+// Picks one activity, weighted by the given weights, from the given candidate pool
+const pickWeightedActivity = (weights: WellnessWeights, candidates: ActivityType[]): ActivityType => {
+  const entries = candidates.map(type => [type, Math.max(weights[type] ?? 0, 0)] as [ActivityType, number]);
   const totalWeight = entries.reduce((sum, [, w]) => sum + w, 0);
 
   if (totalWeight <= 0) {
-    return ACTIVITY_TYPES[Math.floor(Math.random() * ACTIVITY_TYPES.length)];
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   let r = Math.random() * totalWeight;
@@ -81,6 +81,20 @@ const pickWeightedActivity = (weights: WellnessWeights): ActivityType => {
     if (r <= 0) return type;
   }
   return entries[entries.length - 1][0];
+};
+
+// Picks `count` distinct activities (no repeats within the same day) for a single day
+const pickDayActivities = (weights: WellnessWeights, count: number): ActivityType[] => {
+  const remaining = [...ACTIVITY_TYPES];
+  const picks: ActivityType[] = [];
+
+  for (let n = 0; n < count && remaining.length > 0; n++) {
+    const activity = pickWeightedActivity(weights, remaining);
+    picks.push(activity);
+    remaining.splice(remaining.indexOf(activity), 1);
+  }
+
+  return picks;
 };
 
 // Decides how many tasks (1 or 2) each of the 7 days gets, capped at the given weekly total
@@ -114,11 +128,7 @@ export const generateWeeklyPlan = (weights: WellnessWeights, cap: number, monday
 
   days.forEach((date, i) => {
     const key = toISODateString(date);
-    const activities: ActivityType[] = [];
-    for (let n = 0; n < counts[i]; n++) {
-      activities.push(pickWeightedActivity(weights));
-    }
-    assignments[key] = activities;
+    assignments[key] = pickDayActivities(weights, counts[i]);
   });
 
   return {

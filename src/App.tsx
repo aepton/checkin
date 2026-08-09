@@ -93,7 +93,8 @@ function App() {
     fetchState();
   }, [configValid, routeName, weekOffset]);
 
-  // Load wellness settings and this week's plan (generating one if it doesn't exist yet)
+  // Load wellness settings and the plan for the currently selected week (matching the grid's
+  // weekOffset), generating one if it doesn't exist yet
   useEffect(() => {
     if (!routeName) return;
 
@@ -103,7 +104,7 @@ function App() {
         setWellnessDefaultWeights(settings.weights);
         setWellnessDefaultCap(settings.cap);
 
-        const monday = getMondayWithOffset(0);
+        const monday = getMondayWithOffset(weekOffset);
         const weekStart = toISODateString(monday);
         let plan = await loadWeeklyPlan(routeName, weekStart);
 
@@ -120,7 +121,7 @@ function App() {
     };
 
     fetchWellness();
-  }, [routeName]);
+  }, [routeName, weekOffset]);
 
   // Save updated default/week wellness weights and caps from the modal
   const handleSaveWellnessWeights = async (
@@ -137,7 +138,7 @@ function App() {
       setWellnessDefaultWeights(newDefaultWeights);
       setWellnessDefaultCap(newDefaultCap);
 
-      const monday = getMondayWithOffset(0);
+      const monday = getMondayWithOffset(weekOffset);
       const newPlan = generateWeeklyPlan(newWeekWeights, newWeekCap, monday);
       await saveWeeklyPlan(routeName, newPlan);
       setWellnessPlan(newPlan);
@@ -494,10 +495,8 @@ function App() {
                   )}
                   <button
                     className="pill-button pill-button-save"
-                    // TEMPORARY: wired to only push wellness tasks so we can catch up without
-                    // re-creating duplicate family tasks. Revert to onClick={handleSave} once done.
-                    onClick={handleSaveWeekWellness}
-                    disabled={!wellnessPlan}
+                    onClick={handleSave}
+                    disabled={!hasUnsavedChanges}
                   >
                     <span aria-hidden="true">💾</span> Save
                   </button>
