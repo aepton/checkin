@@ -151,40 +151,6 @@ main {
   background-color: #e6e6e6;
 }
 
-/* Save/Cancel buttons inside modals (full-width, not pills) */
-.save-button {
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 14px;
-  margin: 4px 2px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.3s;
-  width: 100%;
-  max-width: 200px;
-  background-color: #4CAF50;
-}
-
-@media (min-width: 768px) {
-  .save-button {
-    padding: 10px 20px;
-    font-size: 16px;
-  }
-}
-
-.save-button:hover:not([disabled]) {
-  background-color: #45a049;
-}
-
-.save-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
 /* Modal styles */
 .modal-overlay {
   position: fixed;
@@ -200,12 +166,30 @@ main {
 }
 
 .modal-content {
+  position: relative;
   background-color: white;
   padding: 20px;
   border-radius: 8px;
   max-width: 400px;
   width: 90%;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-close-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.modal-close-button:hover {
+  color: #333;
 }
 
 .modal-content h3 {
@@ -215,37 +199,11 @@ main {
 
 .modal-buttons {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   margin-top: 20px;
-}
-
-@media (min-width: 500px) {
-  .modal-buttons {
-    flex-direction: row;
-    justify-content: center;
-  }
-}
-
-.cancel-button {
-  background-color: #f2f2f2;
-  color: #333;
-  border: 1px solid #ccc;
-  padding: 8px 16px;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 14px;
-  margin: 4px 2px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.3s;
-  width: 100%;
-  max-width: 200px;
-}
-
-.cancel-button:hover {
-  background-color: #e6e6e6;
 }
 
 .wellness-modal-hint {
@@ -279,7 +237,7 @@ main {
 }
 
 .wellness-weight-value {
-  flex: 0 0 20px;
+  flex: 0 0 34px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -288,5 +246,60 @@ main {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid #e6e6e6;
+}
+
+.wellness-custom-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wellness-custom-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wellness-custom-task-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.wellness-custom-task-row input[type="range"] {
+  flex: 0 0 80px;
+}
+
+.wellness-remove-button {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.wellness-remove-button:hover {
+  color: #c0392b;
+}
+
+.wellness-add-task-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wellness-add-task-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
 }
 

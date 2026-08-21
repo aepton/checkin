@@ -8,14 +8,16 @@ import { AppState, loadState, saveState } from './utils/digitalOceanStorage';
 import { createTasks, TodoistTask } from './utils/todoistApi';
 import { todoistConfig } from './config';
 import {
-  ACTIVITY_LABELS,
   DEFAULT_WEEK_TASK_CAP,
-  DEFAULT_WELLNESS_WEIGHTS,
+  DEFAULT_WELLNESS_TASKS,
   WeeklyWellnessPlan,
-  WellnessWeights,
+  WellnessTask,
+  buildWellnessPool,
   generateWeeklyPlan,
   loadWeeklyPlan,
   loadWellnessSettings,
+  pickSingleDayTaskCount,
+  pickTasksFromPool,
   saveWeeklyPlan,
   saveWellnessSettings,
 } from './utils/wellness';
@@ -46,8 +48,8 @@ function App() {
   const [syncToTodoistEnabled, setSyncToTodoistEnabled] = useState<boolean>(true);
 
   // Wellness (meditation/workout) task randomizer state
-  const [wellnessDefaultWeights, setWellnessDefaultWeights] = useState<WellnessWeights>(DEFAULT_WELLNESS_WEIGHTS);
-  const [wellnessDefaultCap, setWellnessDefaultCap] = useState<number>(DEFAULT_WEEK_TASK_CAP);
+  const [wellnessTasks, setWellnessTasks] = useState<WellnessTask[]>(DEFAULT_WELLNESS_TASKS);
+  const [wellnessCap, setWellnessCap] = useState<number>(DEFAULT_WEEK_TASK_CAP);
   const [wellnessPlan, setWellnessPlan] = useState<WeeklyWellnessPlan | null>(null);
   const [showWellnessModal, setShowWellnessModal] = useState<boolean>(false);
   const [wellnessStatus, setWellnessStatus] = useState<string>('');
@@ -101,15 +103,15 @@ function App() {
     const fetchWellness = async () => {
       try {
         const settings = await loadWellnessSettings(routeName);
-        setWellnessDefaultWeights(settings.weights);
-        setWellnessDefaultCap(settings.cap);
+        setWellnessTasks(settings.tasks);
+        setWellnessCap(settings.cap);
 
         const monday = getMondayWithOffset(weekOffset);
         const weekStart = toISODateString(monday);
         let plan = await loadWeeklyPlan(routeName, weekStart);
 
         if (!plan) {
-          plan = generateWeeklyPlan(settings.weights, settings.cap, monday);
+          plan = generateWeeklyPlan(settings.tasks, settings.cap, monday);
           await saveWeeklyPlan(routeName, plan);
         }
 
@@ -123,30 +125,61 @@ function App() {
     fetchWellness();
   }, [routeName, weekOffset]);
 
-  // Save updated default/week wellness weights and caps from the modal
-  const handleSaveWellnessWeights = async (
-    newDefaultWeights: WellnessWeights,
-    newDefaultCap: number,
-    newWeekWeights: WellnessWeights,
-    newWeekCap: number
-  ) => {
+  // Persist the wellness tasks/cap as the default settings for future weeks
+  const handleSaveDefaultWellness = async (newTasks: WellnessTask[], newCap: number) => {
     if (!routeName) return;
     setShowWellnessModal(false);
 
     try {
-      await saveWellnessSettings(routeName, { weights: newDefaultWeights, cap: newDefaultCap });
-      setWellnessDefaultWeights(newDefaultWeights);
-      setWellnessDefaultCap(newDefaultCap);
-
-      const monday = getMondayWithOffset(weekOffset);
-      const newPlan = generateWeeklyPlan(newWeekWeights, newWeekCap, monday);
-      await saveWeeklyPlan(routeName, newPlan);
-      setWellnessPlan(newPlan);
-      wellnessPlanRef.current = newPlan;
-      setWellnessStatus('Wellness weights saved');
+      await saveWellnessSettings(routeName, { tasks: newTasks, cap: newCap });
+      setWellnessTasks(newTasks);
+      setWellnessCap(newCap);
+      setWellnessStatus('Wellness tasks saved as default');
     } catch (error) {
-      console.error('Error saving wellness weights:', error);
-      setWellnessStatus('Error saving wellness weights');
+      console.error('Error saving wellness defaults:', error);
+      setWellnessStatus('Error saving wellness defaults');
+    }
+  };
+
+  // Generate one ad-hoc day's worth of wellness tasks from whatever is currently in the modal
+  // (even if unsaved) and push them straight to Todoist for today
+  const handleGenerateOneDay = async (tasks: WellnessTask[], _cap: number) => {
+    setShowWellnessModal(false);
+    setWellnessStatus('Generating a day\'s wellness tasks...');
+
+    try {
+      const pool = buildWellnessPool(tasks);
+      const count = pickSingleDayTaskCount();
+      const taskTexts = pickTasksFromPool(pool, count);
+
+      if (taskTexts.length === 0) {
+        setWellnessStatus('No wellness tasks to generate (all weights are 0)');
+        return;
+      }
+
+      const todayKey = toISODateString(new Date());
+      const todoistTasks: TodoistTask[] = taskTexts.map(text => ({
+        label: text,
+        content: text,
+        assignee: abrahamTodoistId,
+        dueDate: todayKey,
+        projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
+        calendar: false,
+        taskDate: new Date(),
+        stateStartTime: '',
+        stateEndTime: '',
+      }));
+
+      const result = await createTasks(todoistConfig, todoistTasks);
+
+      if (result.success) {
+        setWellnessStatus(`Generated ${result.totalSuccess} wellness task(s) for today`);
+      } else {
+        setWellnessStatus(`Generated ${result.totalSuccess} task(s), ${result.totalFailed} failed`);
+      }
+    } catch (error) {
+      console.error('Error generating a day\'s wellness tasks:', error);
+      setWellnessStatus('Error generating wellness tasks');
     }
   };
 
@@ -165,10 +198,10 @@ function App() {
       const activities = plan.assignments[dateKey] || [];
       if (activities.length === 0) return;
       daysWithActivities.push(dateKey);
-      activities.forEach(activity => {
+      activities.forEach(text => {
         tasks.push({
-          label: ACTIVITY_LABELS[activity],
-          content: ACTIVITY_LABELS[activity],
+          label: text,
+          content: text,
           assignee: abrahamTodoistId,
           dueDate: dateKey,
           projectId: todoistConfig.projectId || '6Q8CWgXvPmfx47Vg',
@@ -536,12 +569,11 @@ function App() {
 
             <WellnessModal
               isOpen={showWellnessModal}
-              defaultWeights={wellnessDefaultWeights}
-              defaultCap={wellnessDefaultCap}
-              weekWeights={wellnessPlan?.weights || wellnessDefaultWeights}
-              weekCap={wellnessPlan?.cap ?? wellnessDefaultCap}
+              tasks={wellnessTasks}
+              cap={wellnessCap}
               onCancel={() => setShowWellnessModal(false)}
-              onSave={handleSaveWellnessWeights}
+              onSaveDefault={handleSaveDefaultWellness}
+              onGenerateOneDay={handleGenerateOneDay}
             />
           </>
         )}
