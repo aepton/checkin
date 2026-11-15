@@ -91,7 +91,7 @@ const Grid: React.FC<GridProps> = ({
 
   // Store the state of all tiles in the grid
   const [gridState, setGridState] = useState<
-    { rowIndex: number; colIndex: number; stateIndex: number }[]
+    { rowIndex: number; colIndex: number; stateIndex: number; time?: string }[]
   >([]);
 
   // Initialize grid state
@@ -141,6 +141,30 @@ const Grid: React.FC<GridProps> = ({
     return tile ? tile.stateIndex : 0;
   };
 
+  // Handle setting/clearing the saved time for a specific tile
+  const handleTileTimeChange = (rowIndex: number, colIndex: number, newTime: string | undefined) => {
+    setGridState(prevState => {
+      const newState = [...prevState];
+      const tileIndex = newState.findIndex(
+        tile => tile.rowIndex === rowIndex && tile.colIndex === colIndex
+      );
+
+      if (tileIndex >= 0) {
+        newState[tileIndex] = { ...newState[tileIndex], time: newTime };
+      } else {
+        newState.push({ rowIndex, colIndex, stateIndex: 0, time: newTime });
+      }
+
+      return newState;
+    });
+  };
+
+  // Find the saved time for a specific tile
+  const getTileTime = (rowIndex: number, colIndex: number): string | undefined => {
+    const tile = gridState.find(t => t.rowIndex === rowIndex && t.colIndex === colIndex);
+    return tile ? tile.time : undefined;
+  };
+
   return (
     <div className="grid-container-wrapper">
       {/* Navigation controls */}
@@ -178,11 +202,15 @@ const Grid: React.FC<GridProps> = ({
             <div className="grid-cell header-cell">{rowHeading}</div>
             {Array.from({ length: columns }, (_, colIndex) => (
               <div key={`tile-${rowIndex}-${colIndex}`} className="grid-cell">
-                <Tile 
-                  states={states} 
+                <Tile
+                  states={states}
                   initialState={getTileState(rowIndex, colIndex)}
-                  onStateChange={(newStateIndex) => 
+                  onStateChange={(newStateIndex) =>
                     handleTileStateChange(rowIndex, colIndex, newStateIndex)
+                  }
+                  time={getTileTime(rowIndex, colIndex)}
+                  onTimeChange={(newTime) =>
+                    handleTileTimeChange(rowIndex, colIndex, newTime)
                   }
                 />
               </div>

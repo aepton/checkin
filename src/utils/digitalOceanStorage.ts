@@ -16,6 +16,7 @@ export interface AppState {
     rowIndex: number;
     colIndex: number;
     stateIndex: number;
+    time?: string;
   }[];
 }
 
