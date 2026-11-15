@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './Tile.css';
 
 export interface TileState {
@@ -75,7 +76,7 @@ const Tile: React.FC<TileProps> = ({ states, initialState = 0, onStateChange, ti
         🕐
       </button>
 
-      {isTimeModalOpen && (
+      {isTimeModalOpen && createPortal(
         <div className="modal-overlay" onClick={() => closeTimeModal()}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button
@@ -106,7 +107,8 @@ const Tile: React.FC<TileProps> = ({ states, initialState = 0, onStateChange, ti
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
